@@ -55,16 +55,34 @@
  * SYSCOUNTER is 52-bit but we only need 32-bit for tick counting. */
 static inline uint32_t grtc_counter_get(void)
 {
-    /* Reading SYSCOUNTERL latches SYSCOUNTERH for coherent 64-bit read,
-     * but we only need the low 32 bits. */
-    return (uint32_t)(portNRF_GRTC_REG->SYSCOUNTER[0].SYSCOUNTERL);
+    /* The SYSCOUNTER is only guaranteed readable while it is active: after an idle sleep a read
+     * before it settles returns junk, which the tick catch-up below turns into thousands of ticks.
+     * Reading SYSCOUNTERL latches SYSCOUNTERH (whose reset value already has BUSY set), so the
+     * pair must be re-read until BUSY clears, as nrfx_grtc does; we only need the low 32 bits. */
+    uint32_t lo, hi;
+    do {
+        lo = portNRF_GRTC_REG->SYSCOUNTER[0].SYSCOUNTERL; /* latches SYSCOUNTERH */
+        hi = portNRF_GRTC_REG->SYSCOUNTER[0].SYSCOUNTERH;
+    } while (hi & (1UL << 30)); /* BUSY: the latched pair is not valid yet */
+    return lo;
 }
 
-/* Set compare channel value */
+/* Set compare channel value.
+ * The compare is 52-bit and SYSCOUNTER keeps running across soft resets, so it passes
+ * 2^32 about 71 minutes after power-on. A compare written with CCH = 0 is then already
+ * in the past and never fires: the tick only survives while some other interrupt wakes
+ * the CPU, and the first idle sleep after that never ends. val is a 32-bit target derived
+ * from the low word; rebuild the high word from the live counter, carrying when val
+ * wrapped past the end of the current 2^32 epoch. */
 static inline void grtc_cc_set(uint32_t cc_channel, uint32_t val)
 {
+    uint32_t lo = portNRF_GRTC_REG->SYSCOUNTER[0].SYSCOUNTERL; /* latches SYSCOUNTERH */
+    uint32_t hi = portNRF_GRTC_REG->SYSCOUNTER[0].SYSCOUNTERH & 0x000FFFFFUL;
+    if ((val < lo) && ((int32_t)(val - lo) > 0)) {
+        hi++; /* target lies in the next epoch */
+    }
     portNRF_GRTC_REG->CC[cc_channel].CCL = val;
-    portNRF_GRTC_REG->CC[cc_channel].CCH = 0;  /* High word = 0 for 32-bit compare */
+    portNRF_GRTC_REG->CC[cc_channel].CCH = hi; /* writing CCH enables the compare */
 }
 
 /* Clear compare event */
@@ -117,6 +135,14 @@ void xPortSysTickHandler( void )
         /* At most 1 step if scheduler is suspended */
         if ((diff > 1) && (xTaskGetSchedulerState() != taskSCHEDULER_RUNNING))
         {
+            diff = 1;
+        }
+        /* A bogus counter read must not stall the CPU in this loop nor jump millis() forward by
+         * hours: anything beyond a few seconds of catch-up is treated as one tick and the tick base is
+         * re-anchored to the counter. Genuine long sleeps are accounted in vPortSuppressTicksAndSleep. */
+        if (diff > (TickType_t)(4 * configTICK_RATE_HZ))
+        {
+            grtc_tick_base = systick_counter - (xTaskGetTickCount() + 1) * portNRF_GRTC_TICKS_PER_SYSTICK;
             diff = 1;
         }
         while ((diff--) > 0)
