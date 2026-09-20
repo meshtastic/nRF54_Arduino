@@ -58,6 +58,14 @@ void flash_nrf5x_event_cb (uint32_t event)
 // How many retry attempts when performing flash operations
 #define MAX_RETRY 20
 
+// Upper bound for one async flash op: slices x slice length (2 s)
+#define FLASH_NRF5X_WAIT_SLICES   100
+#define FLASH_NRF5X_WAIT_SLICE_MS 20
+
+// Application hook for SoC events drained here that are not flash completions
+// (power-failure warning, RNG seed request, ...). Weak: absent, they are dropped.
+void flash_nrf5x_soc_event_hook(uint32_t event) __attribute__((weak));
+
 // When soft device is enabled, flash ops are async
 // Eventual success is reported via callback, which we await
 static uint32_t wait_for_async_flash_op_completion(uint32_t initial_result)
@@ -69,8 +77,30 @@ static uint32_t wait_for_async_flash_op_completion(uint32_t initial_result)
   // Operation was queued successfully
   if (initial_result == NRF_SUCCESS) {
 
-    // Wait for result via callback
-    xSemaphoreTake(_sem, portMAX_DELAY);
+    // Wait for the result via callback, but never without a bound: the SoC event normally arrives
+    // through the SoftDevice event task, yet a lost event would otherwise park the calling task
+    // forever (seen on nRF54L15 during a BLE connection: the whole firmware froze in this take).
+    // Drain the SoC event queue ourselves while waiting so the completion cannot get stuck behind
+    // a task that is not running, and hand any other SoC event to the application hook.
+    bool completed = false;
+    for (uint32_t slice = 0; slice < FLASH_NRF5X_WAIT_SLICES && !completed; slice++) {
+      if (xSemaphoreTake(_sem, pdMS_TO_TICKS(FLASH_NRF5X_WAIT_SLICE_MS)) == pdTRUE) {
+        completed = true;
+        break;
+      }
+      uint32_t evt;
+      while (sd_evt_get(&evt) == NRF_SUCCESS) {
+        if (evt == NRF_EVT_FLASH_OPERATION_SUCCESS || evt == NRF_EVT_FLASH_OPERATION_ERROR) {
+          _flash_op_result = evt;
+          completed = true;
+        } else if (flash_nrf5x_soc_event_hook) {
+          flash_nrf5x_soc_event_hook(evt);
+        }
+      }
+    }
+    if (!completed) {
+      return NRF_ERROR_TIMEOUT;
+    }
 
     // If completed successfully
     if (_flash_op_result == NRF_EVT_FLASH_OPERATION_SUCCESS) {

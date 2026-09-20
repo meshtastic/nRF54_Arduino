@@ -241,6 +241,12 @@ void vPortSuppressTicksAndSleep( TickType_t xExpectedIdleTime )
     {
         TickType_t xModifiableIdleTime;
         /* Convert OS ticks to GRTC ticks for wakeup time */
+        /* xExpectedIdleTime * TICKS_PER_SYSTICK must fit 32 bits: with every task blocked forever
+         * FreeRTOS asks for a huge idle and the product wrapped to an arbitrary wake-up time. */
+        if (xExpectedIdleTime > (portNRF_GRTC_MAXTICKS / portNRF_GRTC_TICKS_PER_SYSTICK) - 1)
+        {
+            xExpectedIdleTime = (portNRF_GRTC_MAXTICKS / portNRF_GRTC_TICKS_PER_SYSTICK) - 1;
+        }
         uint32_t wakeupTime = (enterTime + xExpectedIdleTime * portNRF_GRTC_TICKS_PER_SYSTICK) & portNRF_GRTC_MAXTICKS;
 
         /* Disable periodic tick interrupt, use compare for wakeup */
