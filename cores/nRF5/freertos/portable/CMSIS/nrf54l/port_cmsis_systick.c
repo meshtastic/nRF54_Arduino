@@ -278,12 +278,15 @@ void vPortSuppressTicksAndSleep( TickType_t xExpectedIdleTime )
 #endif
 
             {
-                /* S145 does not provide sd_app_evt_wait(); use WFE directly.
-                 * BASEPRI cannot be used because it would prevent WFE from waking up. */
-                do{
-                    __WFE();
-                } while (0 == (NVIC->ISPR[0] | NVIC->ISPR[1] | NVIC->ISPR[2] | NVIC->ISPR[3]
-                             | NVIC->ISPR[4] | NVIC->ISPR[5] | NVIC->ISPR[6] | NVIC->ISPR[7]));
+                /* S145 does not provide sd_app_evt_wait(), so the idle task sleeps on its own with
+                 * PRIMASK set. Use WFI, not WFE: WFI completes as soon as an enabled interrupt is
+                 * pending, PRIMASK or not, which is exactly the wake-up this sleep needs. WFE only
+                 * wakes through SEVONPEND turning the pending transition into an event, and on the
+                 * nRF54L15 the core has been found asleep for hours in that WFE with the GRTC tick and
+                 * SoftDevice interrupts pending and SEVONPEND set. Zephyr sleeps the same way on this
+                 * part (arch_cpu_idle: cpsid i / BASEPRI 0 / wfi / cpsie i). BASEPRI still cannot be
+                 * used for the masking because it would keep WFI from waking. */
+                __WFI();
             }
         }
         configPOST_SLEEP_PROCESSING( xExpectedIdleTime );
