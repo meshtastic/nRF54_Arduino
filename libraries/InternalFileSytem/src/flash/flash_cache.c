@@ -45,6 +45,7 @@ int flash_cache_write (flash_cache_t* fc, uint32_t dst, void const * src, uint32
 {
   uint8_t const * src8 = (uint8_t const *) src;
   uint32_t remain = len;
+  bool flushed_ok = true;
 
   // Program up to page boundary each loop
   while ( remain )
@@ -58,7 +59,7 @@ int flash_cache_write (flash_cache_t* fc, uint32_t dst, void const * src, uint32
     // Page changes, flush old and update new cache
     if ( page_addr != fc->cache_addr )
     {
-      flash_cache_flush(fc);
+      if ( !flash_cache_flush(fc) ) flushed_ok = false;
       fc->cache_addr = page_addr;
 
       // read a whole page from flash
@@ -73,26 +74,60 @@ int flash_cache_write (flash_cache_t* fc, uint32_t dst, void const * src, uint32
     dst += wr_bytes;
   }
 
-  return len - remain;
+  return flushed_ok ? (int) (len - remain) : -1;
 }
 
-void flash_cache_flush (flash_cache_t* fc)
+bool flash_cache_flush (flash_cache_t* fc)
 {
-  if ( fc->cache_addr == FLASH_CACHE_INVALID_ADDR ) return;
+  if ( fc->cache_addr == FLASH_CACHE_INVALID_ADDR ) return true;
 
-  // skip erase & program if verify() exists, and memory matches
-  if ( !(fc->verify && fc->verify(fc->cache_addr, fc->cache_buf, FLASH_CACHE_SIZE)) )
+  uint32_t const page = fc->cache_addr;
+  bool ok = true;
+
+  if ( fc->erase )
   {
-    // indicator TODO allow to disable flash indicator
-    ledOn(LED_BUILTIN);
+    // NOR flash: the page has to be erased before it is programmed.
+    // skip erase & program if verify() exists, and memory matches
+    if ( !(fc->verify && fc->verify(page, fc->cache_buf, FLASH_CACHE_SIZE)) )
+    {
+      // indicator TODO allow to disable flash indicator
+      ledOn(LED_BUILTIN);
 
-    fc->erase(fc->cache_addr);
-    fc->program(fc->cache_addr, fc->cache_buf, FLASH_CACHE_SIZE);
+      ok = fc->erase(page) && (fc->program(page, fc->cache_buf, FLASH_CACHE_SIZE) == FLASH_CACHE_SIZE);
 
-    ledOff(LED_BUILTIN);
+      ledOff(LED_BUILTIN);
+    }
+  }
+  else
+  {
+    // Written in place (RRAM): send only the chunks that differ from the flash. The rest of the
+    // page is never touched, so an interrupted flush can only damage the chunk in flight, not the
+    // other 15 LittleFS blocks sharing the page (with erase-then-program a hang mid-page left the
+    // whole page, superblocks included, at 0xFF).
+    bool led = false;
+
+    for ( uint32_t off = 0; off < FLASH_CACHE_SIZE; off += FLASH_CACHE_WRITE_CHUNK )
+    {
+      if ( fc->verify && fc->verify(page + off, fc->cache_buf + off, FLASH_CACHE_WRITE_CHUNK) ) continue;
+
+      if ( !led )
+      {
+        ledOn(LED_BUILTIN);
+        led = true;
+      }
+
+      if ( fc->program(page + off, fc->cache_buf + off, FLASH_CACHE_WRITE_CHUNK) != FLASH_CACHE_WRITE_CHUNK )
+      {
+        ok = false;
+        break;
+      }
+    }
+
+    if ( led ) ledOff(LED_BUILTIN);
   }
 
   fc->cache_addr = FLASH_CACHE_INVALID_ADDR;
+  return ok;
 }
 
 int flash_cache_read (flash_cache_t* fc, void* dst, uint32_t addr, uint32_t count)

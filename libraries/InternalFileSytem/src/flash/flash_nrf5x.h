@@ -33,8 +33,30 @@
  extern "C" {
 #endif
 
-void flash_nrf5x_flush (void);
+// Returns false when the cached page could not be written completely.
+bool flash_nrf5x_flush (void);
 bool flash_nrf5x_erase(uint32_t addr);
+
+// Flight recorder of the SoftDevice flash operations, meant to be read from a debugger while the
+// firmware is stuck (the counters live in RAM and survive a hang; a debugger reads them by symbol).
+typedef struct
+{
+  uint32_t ops;          // operations handed to the SoftDevice (or the RRAMC without it)
+  uint32_t completed;    // completions received through the SoftDevice event path
+  uint32_t drained;      // completions this driver had to pull with sd_evt_get() itself
+  uint32_t timeouts;     // waits that hit the bound without any completion
+  uint32_t errors;       // operations the SoftDevice refused or reported as failed
+  uint32_t flush_failed; // page flushes reported to the filesystem as an I/O error
+  uint32_t in_flight;    // 1 while a task waits for a completion: a hang shows here
+  uint32_t last_addr;    // destination of the last operation
+  uint32_t last_words;   // its length, 32-bit words
+  uint32_t last_start;   // RTOS tick when it was issued
+  uint32_t last_ticks;   // duration of the last completed operation, RTOS ticks
+  uint32_t max_ticks;    // longest completed operation
+  uint32_t last_result;  // NRF_SUCCESS or the last error code
+} flash_nrf5x_stats_t;
+
+extern flash_nrf5x_stats_t flash_nrf5x_stats;
 
 int flash_nrf5x_write (uint32_t dst, void const * src, uint32_t len);
 int flash_nrf5x_read (void* dst, uint32_t src, uint32_t len);
