@@ -61,8 +61,8 @@ static inline uint32_t grtc_counter_get(void)
      * pair must be re-read until BUSY clears, as nrfx_grtc does; we only need the low 32 bits. */
     uint32_t lo, hi;
     do {
-        lo = portNRF_GRTC_REG->SYSCOUNTER[0].SYSCOUNTERL; /* latches SYSCOUNTERH */
-        hi = portNRF_GRTC_REG->SYSCOUNTER[0].SYSCOUNTERH;
+        lo = portNRF_GRTC_REG->SYSCOUNTER[portNRF_GRTC_DOMAIN].SYSCOUNTERL; /* latches SYSCOUNTERH */
+        hi = portNRF_GRTC_REG->SYSCOUNTER[portNRF_GRTC_DOMAIN].SYSCOUNTERH;
     } while (hi & (1UL << 30)); /* BUSY: the latched pair is not valid yet */
     return lo;
 }
@@ -76,8 +76,8 @@ static inline uint32_t grtc_counter_get(void)
  * wrapped past the end of the current 2^32 epoch. */
 static inline void grtc_cc_set(uint32_t cc_channel, uint32_t val)
 {
-    uint32_t lo = portNRF_GRTC_REG->SYSCOUNTER[0].SYSCOUNTERL; /* latches SYSCOUNTERH */
-    uint32_t hi = portNRF_GRTC_REG->SYSCOUNTER[0].SYSCOUNTERH & 0x000FFFFFUL;
+    uint32_t lo = portNRF_GRTC_REG->SYSCOUNTER[portNRF_GRTC_DOMAIN].SYSCOUNTERL; /* latches SYSCOUNTERH */
+    uint32_t hi = portNRF_GRTC_REG->SYSCOUNTER[portNRF_GRTC_DOMAIN].SYSCOUNTERH & 0x000FFFFFUL;
     if ((val < lo) && ((int32_t)(val - lo) > 0)) {
         hi++; /* target lies in the next epoch */
     }
@@ -97,13 +97,13 @@ static inline void grtc_event_compare_clear(uint32_t cc_channel)
 /* Enable compare interrupt for channel */
 static inline void grtc_int_compare_enable(uint32_t cc_channel)
 {
-    portNRF_GRTC_REG->INTENSET0 = (1UL << cc_channel);
+    portNRF_GRTC_REG->portNRF_GRTC_INTENSET = (1UL << cc_channel);
 }
 
 /* Disable compare interrupt for channel */
 static inline void grtc_int_compare_disable(uint32_t cc_channel)
 {
-    portNRF_GRTC_REG->INTENCLR0 = (1UL << cc_channel);
+    portNRF_GRTC_REG->portNRF_GRTC_INTENCLR = (1UL << cc_channel);
 }
 
 /*-----------------------------------------------------------*/

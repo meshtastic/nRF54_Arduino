@@ -78,8 +78,18 @@ typedef unsigned long UBaseType_t;
 /* GRTC configuration for nRF54L FreeRTOS tick */
 #define portNRF_GRTC_REG        NRF_GRTC
 #define portNRF_GRTC_CC_CH      4
-/* IRQ group 0, matching the INTENSET0/INTENCLR0 writes in port_cmsis_systick.c */
-#define portNRF_GRTC_IRQn       GRTC_0_IRQn
+/* The tick must use the GRTC domain of the CPU it runs on: SYSCOUNTER index, INTEN group and IRQ.
+ * The SYSCOUNTER sleeps along with the CPU and only wakes ahead of a compare armed in the sleeping
+ * domain's own group. With group 0 (the FLPR's) the tick compare did not wake it: the core stayed
+ * in the idle WFI with the counter stopped until a debugger read woke it. The secure application
+ * core is domain 2 (GRTC_IRQ_GROUP in nrf54l15_interim.h); the SoftDevice owns group 3. */
+#define portNRF_GRTC_DOMAIN     2
+#define portNRF_GRTC_INTENSET   INTENSET2
+#define portNRF_GRTC_INTENCLR   INTENCLR2
+#define portNRF_GRTC_IRQn       GRTC_2_IRQn
+#if defined(GRTC_IRQ_GROUP) && (GRTC_IRQ_GROUP != portNRF_GRTC_DOMAIN)
+#error "portNRF_GRTC_DOMAIN does not match this core's GRTC_IRQ_GROUP"
+#endif
 /* GRTC SYSCOUNTER runs at 1 MHz (not LFCLK). configSYSTICK_CLOCK_HZ = 1000000 */
 #define portNRF_GRTC_TICKS_PER_SYSTICK  ( configSYSTICK_CLOCK_HZ / configTICK_RATE_HZ )
 /* 32-bit compare window */

@@ -182,8 +182,8 @@ standard names - or at least those used in the unmodified vector table. */
 /* GRTC SYSCOUNTER runs at 1 MHz */
 #define configSYSTICK_CLOCK_HZ  ( 1000000UL )
 
-/* The tick uses GRTC IRQ group 0 (INTENSET0 in port_cmsis_systick.c); the SoftDevice owns group 3. */
-#define xPortSysTickHandler     GRTC_0_IRQHandler
+/* The tick uses the application core's GRTC group 2 (portNRF_GRTC_DOMAIN); the SoftDevice owns group 3. */
+#define xPortSysTickHandler     GRTC_2_IRQHandler
 
 /* CM33 TrustZone / MPU not used */
 #define configENABLE_TRUSTZONE  0
