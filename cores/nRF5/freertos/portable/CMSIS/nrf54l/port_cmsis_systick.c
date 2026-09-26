@@ -196,6 +196,13 @@ void vPortSetupTimerInterrupt( void )
     }
     /* The GRTC survives soft resets, so set this outside the start path: sd_softdevice_enable() requires AUTOEN. */
     nrf_grtc_sys_counter_auto_mode_set(NRF_GRTC, true);
+    /* Nothing else writes the sleep timing either (nrfx_grtc_init() would, but nothing calls it). At the
+     * reset values, TIMEOUT 0 and WAKETIME 1, the SYSCOUNTER stops as soon as the CPU sleeps and gets a
+     * single 32 kHz cycle to wake up before a compare. Every idle hang caught on the DK had a SoftDevice
+     * compare 1.5-2 of those cycles past the stop that never fired, and no later one fired either, so the
+     * CPU slept until the watchdog. Use the values nrfx_grtc_init() applies (NRFX_GRTC_SLEEP_DEFAULT_CONFIG). */
+    nrf_grtc_timeout_set(NRF_GRTC, 5);
+    nrf_grtc_waketime_set(NRF_GRTC, 4);
 
     /* Clear any pending event */
     grtc_event_compare_clear(portNRF_GRTC_CC_CH);
