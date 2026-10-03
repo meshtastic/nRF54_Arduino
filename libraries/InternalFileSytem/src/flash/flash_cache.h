@@ -31,21 +31,19 @@
 #define FLASH_CACHE_SIZE          4096        // must be a erasable page size
 #define FLASH_CACHE_INVALID_ADDR  0xffffffff
 
-// Granularity of an in-place flush (erase == NULL): only the chunks of the cached page that
-// differ from the flash are written. Must be a multiple of 4 and divide FLASH_CACHE_SIZE.
+// Granularity of a flush: only the chunks of the cached page that differ from the flash are
+// written, in place. Must be a multiple of 4 and divide FLASH_CACHE_SIZE.
 #define FLASH_CACHE_WRITE_CHUNK   128
 
 typedef struct
 {
-    // NULL when the memory is written in place (RRAM): the flush then programs only the chunks
-    // that changed and never wipes the page first. Non-NULL keeps the NOR erase-then-program flush.
-    bool (*erase) (uint32_t addr);
     uint32_t (*program) (uint32_t dst, void const * src, uint32_t len);
     uint32_t (*read) (void* dst, uint32_t src, uint32_t len);
     bool (*verify) (uint32_t addr, void const * buf, uint32_t len);
 
     uint32_t cache_addr;
     uint8_t* cache_buf;
+    uint8_t  flush_failures; // consecutive failed flushes of the cached page
 } flash_cache_t;
 
 #ifdef __cplusplus
@@ -55,7 +53,8 @@ extern "C" {
 // Returns count, or -1 when a page flush forced by this write failed. The page that could not be
 // flushed stays cached, and the data of this write is not taken (part of it may be, when it spans pages).
 int flash_cache_write (flash_cache_t* fc, uint32_t dst, void const *src, uint32_t count);
-// Returns false when the page could not be written completely; it then stays cached for the next flush.
+// Returns false when the page could not be written completely. It then stays cached for the next
+// flush, up to FLASH_CACHE_MAX_FLUSH_FAILURES failures in a row, after which it is dropped.
 bool flash_cache_flush (flash_cache_t* fc);
 int flash_cache_read (flash_cache_t* fc, void* dst, uint32_t addr, uint32_t count);
 

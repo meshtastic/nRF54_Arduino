@@ -96,14 +96,27 @@ static uint32_t flash_ops_outstanding (void)
   return (uint32_t) n;
 }
 
-// How many times an operation the SoftDevice reports BUSY is re-issued (5 ms apart)
+// How many times an operation the SoftDevice reports BUSY, or could not fit around the radio, is
+// re-issued (5 ms apart)
 #define MAX_RETRY 20
 // How many times an operation whose completion never arrived is re-issued
 #define MAX_TIMEOUT_RETRY 3
 
-// Upper bound for one async flash op: slices x slice length (2 s)
-#define FLASH_NRF5X_WAIT_SLICES   100
-#define FLASH_NRF5X_WAIT_SLICE_MS 20
+// Total time one chunk may take, every attempt and wait included. The filesystem lock is held all
+// along, so this, not the number of attempts, is what bounds the stall.
+#define FLASH_NRF5X_CHUNK_BUDGET_MS 2000
+// Part of it that settling an operation left outstanding by a timeout may use
+#define FLASH_NRF5X_SETTLE_MS       500
+#define FLASH_NRF5X_WAIT_SLICE_MS   20
+
+// The SoftDevice reported NRF_EVT_FLASH_OPERATION_ERROR: it could not fit the write around radio
+// activity. Retried like BUSY, after a pause.
+#define FLASH_NRF5X_ERR_SD_FAILED   NRF_ERROR_INTERNAL
+
+static bool deadline_passed (TickType_t deadline)
+{
+  return (int32_t) (xTaskGetTickCount() - deadline) >= 0;
+}
 
 // Application hook for SoC events drained here that are not flash completions
 // (power-failure warning, RNG seed request, ...). Bluefruit54Lib provides a weak default that
@@ -124,8 +137,9 @@ static void drain_soc_events (void)
   }
 }
 
-// The write just issued has landed once dst reads back as src. The cache only programs chunks that
-// differ from the flash, so a match means the SoftDevice has written them and is done reading src,
+// The write just issued has landed once dst reads back as src. flash_words_program() trims every
+// write to start and end on a word that differs from the flash, so a match means the SoftDevice has
+// written the range through its last word (it writes in address order) and is done reading src,
 // which the caller is about to reuse. The counts alone cannot prove it: a completion that
 // sd_flash_write_wait() wrote off as lost may still arrive and make them match early.
 static bool flash_write_landed (uint32_t dst, uint32_t const * src, uint32_t n_words)
@@ -141,24 +155,23 @@ typedef enum
 } flash_wait_t;
 
 // Wait until every accepted operation has reported its completion and, when src is given, the write
-// just issued has landed; but never without a bound: the SoC event normally arrives through the
+// just issued has landed; but never past the deadline: the SoC event normally arrives through the
 // SoftDevice event task, yet a lost event would otherwise park the calling task forever (seen on
 // nRF54L15 during a BLE connection: the whole firmware froze in an unbounded take here). Drain the
 // SoC event queue ourselves while waiting so the completion cannot get stuck behind a task that is
 // not running, and hand any other SoC event to the application hook.
-static flash_wait_t wait_flash_ops (uint32_t dst, uint32_t const * src, uint32_t n_words)
+static flash_wait_t wait_flash_ops (TickType_t deadline, uint32_t dst, uint32_t const * src, uint32_t n_words)
 {
-  for (uint32_t slice = 0; slice < FLASH_NRF5X_WAIT_SLICES; slice++) {
+  for (;;) {
     if ( !flash_ops_outstanding() ) {
       if ( flash_write_landed(dst, src, n_words) ) return FLASH_WAIT_DONE;
       if ( _flash_op_result == NRF_EVT_FLASH_OPERATION_ERROR ) return FLASH_WAIT_FAILED;
     }
+    if ( deadline_passed(deadline) ) return FLASH_WAIT_TIMEOUT;
     // Only a wake-up: a give left by a completion counted earlier costs one more pass
     if (xSemaphoreTake(_sem, pdMS_TO_TICKS(FLASH_NRF5X_WAIT_SLICE_MS)) == pdTRUE) continue;
     drain_soc_events();
   }
-  if ( !flash_ops_outstanding() && flash_write_landed(dst, src, n_words) ) return FLASH_WAIT_DONE;
-  return FLASH_WAIT_TIMEOUT;
 }
 
 // Set once settling an outstanding write timed out, so the retries after BUSY do not wait again
@@ -166,7 +179,7 @@ static bool _settle_given_up = false;
 
 // When soft device is enabled, flash ops are async
 // Eventual success is reported via callback, which we await
-static uint32_t sd_flash_write_wait (uint32_t dst, uint32_t const * src, uint32_t n_words)
+static uint32_t sd_flash_write_wait (TickType_t deadline, uint32_t dst, uint32_t const * src, uint32_t n_words)
 {
   flash_nrf5x_stats.in_flight = 1;
 
@@ -174,7 +187,9 @@ static uint32_t sd_flash_write_wait (uint32_t dst, uint32_t const * src, uint32_
   // settle it first, so that completion cannot be taken for the one of the write issued here.
   uint32_t owed = flash_ops_outstanding();
   if (owed) {
-    if (!_settle_given_up && wait_flash_ops(0, NULL, 0) == FLASH_WAIT_DONE) {
+    TickType_t settle_deadline = xTaskGetTickCount() + pdMS_TO_TICKS(FLASH_NRF5X_SETTLE_MS);
+    if ((int32_t) (settle_deadline - deadline) > 0) settle_deadline = deadline;
+    if (!_settle_given_up && wait_flash_ops(settle_deadline, 0, NULL, 0) == FLASH_WAIT_DONE) {
       owed = 0;
     } else {
       // Settling timed out, now or before a BUSY retry: take only what is already queued
@@ -205,7 +220,7 @@ static uint32_t sd_flash_write_wait (uint32_t dst, uint32_t const * src, uint32_
     flash_nrf5x_stats.written_off += owed;
   }
 
-  flash_wait_t const waited = wait_flash_ops(dst, src, n_words);
+  flash_wait_t const waited = wait_flash_ops(deadline, dst, src, n_words);
   flash_nrf5x_stats.in_flight = 0;
   if (waited == FLASH_WAIT_TIMEOUT) {
     // Left outstanding: the next write settles it before it is issued
@@ -213,9 +228,8 @@ static uint32_t sd_flash_write_wait (uint32_t dst, uint32_t const * src, uint32_
     return NRF_ERROR_TIMEOUT;
   }
 
-  // General failure: retried like a lost completion
   if (waited == FLASH_WAIT_FAILED) {
-    return NRF_ERROR_TIMEOUT;
+    return FLASH_NRF5X_ERR_SD_FAILED;
   }
 
   flash_nrf5x_stats.last_ticks = xTaskGetTickCount() - flash_nrf5x_stats.last_start;
@@ -241,7 +255,7 @@ static uint32_t rram_write(uint32_t dst, uint32_t const * src, uint32_t n_words)
   return NRF_SUCCESS;
 }
 
-static uint32_t flash_words_write(bool sd_en, uint32_t dst, uint32_t const * src, uint32_t n_words)
+static uint32_t flash_words_write(bool sd_en, uint32_t dst, uint32_t const * src, uint32_t n_words, TickType_t deadline)
 {
   flash_nrf5x_stats.ops++;
   flash_nrf5x_stats.last_addr  = dst;
@@ -252,7 +266,7 @@ static uint32_t flash_words_write(bool sd_en, uint32_t dst, uint32_t const * src
   if ( !sd_en ) {
     result = rram_write(dst, src, n_words);
   } else {
-    result = sd_flash_write_wait(dst, src, n_words);
+    result = sd_flash_write_wait(deadline, dst, src, n_words);
   }
 
   flash_nrf5x_stats.last_result = result;
@@ -262,24 +276,41 @@ static uint32_t flash_words_write(bool sd_en, uint32_t dst, uint32_t const * src
   return result;
 }
 
-// One flash operation with the retry policy: BUSY is re-issued after a short pause (a previous
-// operation may still be running inside the SoftDevice), a lost completion is re-issued a few
+// One flash operation with the retry policy, within FLASH_NRF5X_CHUNK_BUDGET_MS in total: BUSY (a
+// previous operation may still be running inside the SoftDevice) and a SoftDevice-reported failure
+// (no room around the radio) are re-issued after a short pause, a lost completion is re-issued a few
 // times, any other error is final because it will not fix itself (bad address, forbidden area).
 static uint32_t flash_words_write_retry(bool sd_en, uint32_t dst, uint32_t const * src, uint32_t n_words)
 {
+  TickType_t const deadline = xTaskGetTickCount() + pdMS_TO_TICKS(FLASH_NRF5X_CHUNK_BUDGET_MS);
   uint32_t err;
-  uint8_t busy = 0, timeouts = 0;
+  uint8_t retries = 0, timeouts = 0;
 
   for (;;) {
-    err = flash_words_write(sd_en, dst, src, n_words);
-    if ( err == NRF_SUCCESS ) return err;
-    if ( err == NRF_ERROR_BUSY && ++busy < MAX_RETRY ) {
+    err = flash_words_write(sd_en, dst, src, n_words, deadline);
+    if ( err == NRF_SUCCESS || deadline_passed(deadline) ) return err;
+    if ( (err == NRF_ERROR_BUSY || err == FLASH_NRF5X_ERR_SD_FAILED) && ++retries < MAX_RETRY ) {
       delay(5);
       continue;
     }
     if ( err == NRF_ERROR_TIMEOUT && ++timeouts < MAX_TIMEOUT_RETRY ) continue;
     return err;
   }
+}
+
+// Write only the words that differ from the flash, from the first to the last one. Besides sparing
+// the RRAM, every write then starts and ends on a word it changes, which is what lets the data check
+// in wait_flash_ops() vouch for it; a range already in place is not written at all.
+static uint32_t flash_words_program(bool sd_en, uint32_t dst, uint32_t const * src, uint32_t n_words)
+{
+  uint32_t const * flash = (uint32_t const *) dst;
+  uint32_t first = 0, last = n_words;
+
+  while ( first < n_words && flash[first] == src[first] ) first++;
+  if ( first == n_words ) return NRF_SUCCESS;
+  while ( flash[last - 1] == src[last - 1] ) last--;
+
+  return flash_words_write_retry(sd_en, dst + 4 * first, src + first, last - first);
 }
 
 // Flash Abstraction Layer
@@ -292,9 +323,8 @@ static uint8_t _cache_buffer[FLASH_CACHE_SIZE] __attribute__((aligned(4)));
 
 static flash_cache_t _cache =
 {
-  // RRAM is written in place: no erase, the cache flushes only the chunks that changed.
+  // RRAM is written in place: the cache flushes only the chunks that changed.
   // fal_erase stays available through flash_nrf5x_erase() for the filesystem format path.
-  .erase      = NULL,
   .program    = fal_program,
   .read       = fal_read,
   .verify     = fal_verify,
@@ -362,7 +392,7 @@ static bool fal_erase (uint32_t addr)
   {
     uint32_t wr_bytes = (remaining < chunk_bytes) ? remaining : chunk_bytes;
 
-    VERIFY_STATUS(flash_words_write_retry(sd_en, dst, ff_buf, wr_bytes / 4), false);
+    VERIFY_STATUS(flash_words_program(sd_en, dst, ff_buf, wr_bytes / 4), false);
 
     dst += wr_bytes;
     remaining -= wr_bytes;
@@ -389,7 +419,7 @@ static uint32_t fal_program (uint32_t dst, void const * src, uint32_t len)
   {
     uint32_t wr_bytes = (len - written < chunk_bytes) ? (len - written) : chunk_bytes;
 
-    VERIFY_STATUS(flash_words_write_retry(sd_en, dst + written, (uint32_t const *) (src8 + written), wr_bytes / 4), written);
+    VERIFY_STATUS(flash_words_program(sd_en, dst + written, (uint32_t const *) (src8 + written), wr_bytes / 4), written);
 
     written += wr_bytes;
   }
