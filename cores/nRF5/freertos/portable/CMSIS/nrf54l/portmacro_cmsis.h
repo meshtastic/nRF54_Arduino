@@ -92,8 +92,6 @@ typedef unsigned long UBaseType_t;
 #endif
 /* GRTC SYSCOUNTER runs at 1 MHz (not LFCLK). configSYSTICK_CLOCK_HZ = 1000000 */
 #define portNRF_GRTC_TICKS_PER_SYSTICK  ( configSYSTICK_CLOCK_HZ / configTICK_RATE_HZ )
-/* 32-bit compare window */
-#define portNRF_GRTC_MAXTICKS   (0xFFFFFFFFUL)
 /*-----------------------------------------------------------*/
 
 /* Scheduler utilities. */

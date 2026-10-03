@@ -28,6 +28,7 @@
 
 /* Scheduler includes. */
 #include "nrfy_grtc.h"
+#include "nrfx_grtc.h"
 #include "FreeRTOS.h"
 #include "task.h"
 #include "nrf_nvic.h"
@@ -51,38 +52,27 @@
 
 /*-----------------------------------------------------------*/
 
-/* Read the low 32 bits of the GRTC SYSCOUNTER.
- * SYSCOUNTER is 52-bit but we only need 32-bit for tick counting. */
-static inline uint32_t grtc_counter_get(void)
+/* Read the 52-bit GRTC SYSCOUNTER of this core's domain (NRF_GRTC_DOMAIN_INDEX is GRTC_IRQ_GROUP,
+ * which the #error in portmacro_cmsis.h ties to portNRF_GRTC_DOMAIN). nrfy re-reads until BUSY and
+ * OVERFLOW clear: after an idle sleep the counter is not readable until it settles. Working in
+ * 64 bits leaves no 2^32 epoch to reconstruct, although the counter passes 2^32 about 71 min after
+ * power-on and keeps running across soft resets. */
+static inline uint64_t grtc_counter_get(void)
 {
-    /* The SYSCOUNTER is only guaranteed readable while it is active: after an idle sleep a read
-     * before it settles returns junk, which the tick catch-up below turns into thousands of ticks.
-     * Reading SYSCOUNTERL latches SYSCOUNTERH (whose reset value already has BUSY set), so the
-     * pair must be re-read until BUSY clears, as nrfx_grtc does; we only need the low 32 bits. */
-    uint32_t lo, hi;
-    do {
-        lo = portNRF_GRTC_REG->SYSCOUNTER[portNRF_GRTC_DOMAIN].SYSCOUNTERL; /* latches SYSCOUNTERH */
-        hi = portNRF_GRTC_REG->SYSCOUNTER[portNRF_GRTC_DOMAIN].SYSCOUNTERH;
-    } while (hi & (1UL << 30)); /* BUSY: the latched pair is not valid yet */
-    return lo;
+    return nrfy_grtc_sys_counter_get(portNRF_GRTC_REG);
 }
 
-/* Set compare channel value.
- * The compare is 52-bit and SYSCOUNTER keeps running across soft resets, so it passes
- * 2^32 about 71 minutes after power-on. A compare written with CCH = 0 is then already
- * in the past and never fires: the tick only survives while some other interrupt wakes
- * the CPU, and the first idle sleep after that never ends. val is a 32-bit target derived
- * from the low word; rebuild the high word from the live counter, carrying when val
- * wrapped past the end of the current 2^32 epoch. */
-static inline void grtc_cc_set(uint32_t cc_channel, uint32_t val)
+/* Arm a compare channel at an absolute SYSCOUNTER value. A target already in the past raises the
+ * event at once, which is what a late tick needs. Writing CCL before CCH can also form a value in
+ * the past for a moment; drop that spurious event while the target itself is still ahead, as
+ * nrfx_grtc_syscounter_cc_abs_set(..., safe_setting = true) does. */
+static inline void grtc_cc_set(uint32_t cc_channel, uint64_t val)
 {
-    uint32_t lo = portNRF_GRTC_REG->SYSCOUNTER[portNRF_GRTC_DOMAIN].SYSCOUNTERL; /* latches SYSCOUNTERH */
-    uint32_t hi = portNRF_GRTC_REG->SYSCOUNTER[portNRF_GRTC_DOMAIN].SYSCOUNTERH & 0x000FFFFFUL;
-    if ((val < lo) && ((int32_t)(val - lo) > 0)) {
-        hi++; /* target lies in the next epoch */
+    nrfy_grtc_sys_counter_cc_set(portNRF_GRTC_REG, cc_channel, val);
+    if (nrfy_grtc_sys_counter_compare_event_check(portNRF_GRTC_REG, cc_channel) && (val > grtc_counter_get()))
+    {
+        nrfy_grtc_sys_counter_compare_event_clear(portNRF_GRTC_REG, cc_channel);
     }
-    portNRF_GRTC_REG->CC[cc_channel].CCL = val;
-    portNRF_GRTC_REG->CC[cc_channel].CCH = hi; /* writing CCH enables the compare */
 }
 
 /* Clear compare event */
@@ -108,8 +98,15 @@ static inline void grtc_int_compare_disable(uint32_t cc_channel)
 
 /*-----------------------------------------------------------*/
 
-// SYSCOUNTER value at scheduler start; the counter survives resets, so ticks count from here.
-static uint32_t grtc_tick_base;
+/* SYSCOUNTER value at which the next OS tick falls due. Ticks stay on this grid, which starts with
+ * the scheduler, instead of being re-armed one period after whenever the interrupt happened to run. */
+static uint64_t grtc_next_tick;
+
+/* A backlog (core halted in a debugger, a long critical section) is caught up at most this many
+ * ticks per interrupt, so the ISR stays short; the compare is then left behind and fires again. */
+#define portNRF_GRTC_CATCHUP_MAX ((TickType_t)(4 * configTICK_RATE_HZ))
+/* Interrupts that found more than portNRF_GRTC_CATCHUP_MAX ticks due; readable from a debugger. */
+static volatile uint32_t grtc_tick_backlogs;
 
 void xPortSysTickHandler( void )
 {
@@ -121,30 +118,31 @@ void xPortSysTickHandler( void )
     BaseType_t switch_req = pdFALSE;
     uint32_t isrstate = portSET_INTERRUPT_MASK_FROM_ISR();
 
-    uint32_t systick_counter = grtc_counter_get();
+    uint64_t const now = grtc_counter_get();
 
     if (configUSE_DISABLE_TICK_AUTO_CORRECTION_DEBUG == 0)
     {
-        /* Auto-correct missed ticks.
+        /* Auto-correct missed ticks: every grid tick that has fallen due.
          * GRTC runs at configSYSTICK_CLOCK_HZ (1 MHz).
          * Each OS tick = portNRF_GRTC_TICKS_PER_SYSTICK GRTC ticks. */
-        TickType_t diff;
-        uint32_t expected_counter = grtc_tick_base + xTaskGetTickCount() * portNRF_GRTC_TICKS_PER_SYSTICK;
-        diff = (systick_counter - expected_counter) / portNRF_GRTC_TICKS_PER_SYSTICK;
+        TickType_t diff = 0;
+        if (now >= grtc_next_tick)
+        {
+            diff = (TickType_t)((now - grtc_next_tick) / portNRF_GRTC_TICKS_PER_SYSTICK) + 1;
+        }
 
         /* At most 1 step if scheduler is suspended */
         if ((diff > 1) && (xTaskGetSchedulerState() != taskSCHEDULER_RUNNING))
         {
             diff = 1;
         }
-        /* A bogus counter read must not stall the CPU in this loop nor jump millis() forward by
-         * hours: anything beyond a few seconds of catch-up is treated as one tick and the tick base is
-         * re-anchored to the counter. Genuine long sleeps are accounted in vPortSuppressTicksAndSleep. */
-        if (diff > (TickType_t)(4 * configTICK_RATE_HZ))
+        else if (diff > portNRF_GRTC_CATCHUP_MAX)
         {
-            grtc_tick_base = systick_counter - (xTaskGetTickCount() + 1) * portNRF_GRTC_TICKS_PER_SYSTICK;
-            diff = 1;
+            grtc_tick_backlogs++;
+            diff = portNRF_GRTC_CATCHUP_MAX;
         }
+
+        grtc_next_tick += (uint64_t)diff * portNRF_GRTC_TICKS_PER_SYSTICK;
         while ((diff--) > 0)
         {
             switch_req |= xTaskIncrementTick();
@@ -153,11 +151,18 @@ void xPortSysTickHandler( void )
     else
     {
         switch_req = xTaskIncrementTick();
+        grtc_next_tick = now + portNRF_GRTC_TICKS_PER_SYSTICK;
     }
 
-    /* Schedule next compare */
+    /* Schedule next compare: the next tick on the grid. When ticks are still due it lies in the past
+     * and fires at once, except while the scheduler is suspended, which would only spin through here:
+     * then wait one tick period. */
     {
-        uint32_t next_cc = grtc_counter_get() + portNRF_GRTC_TICKS_PER_SYSTICK;
+        uint64_t next_cc = grtc_next_tick;
+        if ((next_cc <= now) && (xTaskGetSchedulerState() == taskSCHEDULER_SUSPENDED))
+        {
+            next_cc = now + portNRF_GRTC_TICKS_PER_SYSTICK;
+        }
         grtc_cc_set(portNRF_GRTC_CC_CH, next_cc);
     }
 
@@ -194,23 +199,36 @@ void vPortSetupTimerInterrupt( void )
         nrfy_grtc_prepare(NRF_GRTC, true);
         nrfy_grtc_sys_counter_start(NRF_GRTC, true);
     }
-    /* The GRTC survives soft resets, so set this outside the start path: sd_softdevice_enable() requires AUTOEN. */
-    nrf_grtc_sys_counter_auto_mode_set(NRF_GRTC, true);
-    /* Nothing else writes the sleep timing either (nrfx_grtc_init() would, but nothing calls it). At the
+    /* The GRTC survives soft resets, so configure its sleep outside the start path. Nothing else does:
+     * nrfx_grtc_init() would, but nothing calls it and the nrfx GRTC driver is not enabled here. At the
      * reset values, TIMEOUT 0 and WAKETIME 1, the SYSCOUNTER stops as soon as the CPU sleeps and gets a
      * single 32 kHz cycle to wake up before a compare. Every idle hang caught on the DK had a SoftDevice
      * compare 1.5-2 of those cycles past the stop that never fired, and no later one fired either, so the
-     * CPU slept until the watchdog. Use the values nrfx_grtc_init() applies (NRFX_GRTC_SLEEP_DEFAULT_CONFIG). */
-    nrf_grtc_timeout_set(NRF_GRTC, 5);
-    nrf_grtc_waketime_set(NRF_GRTC, 4);
+     * CPU slept until the watchdog. Apply NRFX_GRTC_SLEEP_DEFAULT_CONFIG (TIMEOUT 5, WAKETIME 4, and
+     * AUTOEN, which sd_softdevice_enable() requires) the way nrfx_grtc_sleep_configure() does, with the
+     * SYSCOUNTER stopped for the write. The SoftDevice is not enabled yet when the scheduler starts. */
+    {
+        nrfx_grtc_sleep_config_t const sleep_cfg = NRFX_GRTC_SLEEP_DEFAULT_CONFIG;
+        bool const active = nrfy_grtc_sys_counter_check(NRF_GRTC);
+        if (active)
+        {
+            nrfy_grtc_sys_counter_set(NRF_GRTC, false);
+        }
+        nrfy_grtc_sys_counter_auto_mode_set(NRF_GRTC, sleep_cfg.auto_mode);
+        nrfy_grtc_timeout_set(NRF_GRTC, sleep_cfg.timeout);
+        nrfy_grtc_waketime_set(NRF_GRTC, sleep_cfg.waketime);
+        if (active)
+        {
+            nrfy_grtc_sys_counter_set(NRF_GRTC, true);
+        }
+    }
 
     /* Clear any pending event */
     grtc_event_compare_clear(portNRF_GRTC_CC_CH);
 
-    /* Set first compare value */
-    uint32_t now = grtc_counter_get();
-    grtc_tick_base = now;
-    grtc_cc_set(portNRF_GRTC_CC_CH, now + portNRF_GRTC_TICKS_PER_SYSTICK);
+    /* First tick one period from now: the grid starts here */
+    grtc_next_tick = grtc_counter_get() + portNRF_GRTC_TICKS_PER_SYSTICK;
+    grtc_cc_set(portNRF_GRTC_CC_CH, grtc_next_tick);
 
     /* Enable compare interrupt */
     grtc_int_compare_enable(portNRF_GRTC_CC_CH);
@@ -223,13 +241,7 @@ void vPortSetupTimerInterrupt( void )
 
 void vPortSuppressTicksAndSleep( TickType_t xExpectedIdleTime )
 {
-    TickType_t enterTime;
-
-    /* Make sure the expected idle time does not overflow the counter. */
-    if ( xExpectedIdleTime > portNRF_GRTC_MAXTICKS - configEXPECTED_IDLE_TIME_BEFORE_SLEEP )
-    {
-        xExpectedIdleTime = portNRF_GRTC_MAXTICKS - configEXPECTED_IDLE_TIME_BEFORE_SLEEP;
-    }
+    /* No cap on xExpectedIdleTime: in 64 bits even portMAX_DELAY ticks (~49 days) fit the 52-bit compare. */
 
     /* Block all the interrupts globally */
 #ifdef SOFTDEVICE_PRESENT
@@ -242,28 +254,19 @@ void vPortSuppressTicksAndSleep( TickType_t xExpectedIdleTime )
     __disable_irq();
 #endif
 
-    enterTime = grtc_counter_get();
-
     if ( eTaskConfirmSleepModeStatus() != eAbortSleep )
     {
         TickType_t xModifiableIdleTime;
-        /* Convert OS ticks to GRTC ticks for wakeup time */
-        /* With every task blocked forever FreeRTOS asks for a huge idle. The wake-up must stay less
-         * than 2^31 GRTC ticks (~35 min) ahead: grtc_cc_set only carries into the next 2^32 epoch
-         * when (int32_t)(val - lo) is positive, so a target further out lands in the past and the
-         * compare never fires. That also keeps xExpectedIdleTime * TICKS_PER_SYSTICK within 32 bits. */
-        if (xExpectedIdleTime > (0x7FFFFFFFUL / portNRF_GRTC_TICKS_PER_SYSTICK) - 1)
-        {
-            xExpectedIdleTime = (0x7FFFFFFFUL / portNRF_GRTC_TICKS_PER_SYSTICK) - 1;
-        }
-        uint32_t wakeupTime = (enterTime + xExpectedIdleTime * portNRF_GRTC_TICKS_PER_SYSTICK) & portNRF_GRTC_MAXTICKS;
+        /* Wake on the grid, when the tick that unblocks a task falls due: the next tick is due at
+         * grtc_next_tick and xExpectedIdleTime counts it. */
+        uint64_t const wakeupTime = grtc_next_tick + (uint64_t)(xExpectedIdleTime - 1) * portNRF_GRTC_TICKS_PER_SYSTICK;
 
         /* Disable periodic tick interrupt, use compare for wakeup */
         grtc_int_compare_disable(portNRF_GRTC_CC_CH);
 
-        /* Configure compare for wakeup */
-        grtc_cc_set(portNRF_GRTC_CC_CH, wakeupTime);
+        /* Configure compare for wakeup. Clear first: grtc_cc_set() keeps the event of a target already passed. */
         grtc_event_compare_clear(portNRF_GRTC_CC_CH);
+        grtc_cc_set(portNRF_GRTC_CC_CH, wakeupTime);
         grtc_int_compare_enable(portNRF_GRTC_CC_CH);
 
         __DSB();
@@ -305,26 +308,30 @@ void vPortSuppressTicksAndSleep( TickType_t xExpectedIdleTime )
 
         /* Correct the system ticks */
         {
-            TickType_t diff;
-            TickType_t exitTime;
+            /* Whole grid ticks that fell due while asleep */
+            TickType_t diff = 0;
+            uint64_t const exitTime = grtc_counter_get();
+            if (exitTime >= grtc_next_tick)
+            {
+                diff = (TickType_t)((exitTime - grtc_next_tick) / portNRF_GRTC_TICKS_PER_SYSTICK) + 1;
+            }
 
-            exitTime = grtc_counter_get();
-            /* Convert GRTC ticks back to OS ticks */
-            diff = ((exitTime - enterTime) & portNRF_GRTC_MAXTICKS) / portNRF_GRTC_TICKS_PER_SYSTICK;
-
-            /* Re-enable periodic tick via compare */
-            uint32_t next_cc = grtc_counter_get() + portNRF_GRTC_TICKS_PER_SYSTICK;
-            grtc_cc_set(portNRF_GRTC_CC_CH, next_cc);
-            grtc_event_compare_clear(portNRF_GRTC_CC_CH);
-            grtc_int_compare_enable(portNRF_GRTC_CC_CH);
-
-            /* It is important that we clear pending here so that our corrections are latest and in sync with tick_interrupt handler */
-            NVIC_ClearPendingIRQ(portNRF_GRTC_IRQn);
-
+            /* vTaskStepTick() must not pass the unblock tick. Ticks beyond it stay due, and the tick
+             * compare armed below in the past catches them up at once. */
             if ((configUSE_TICKLESS_IDLE_SIMPLE_DEBUG) && (diff > xExpectedIdleTime))
             {
                 diff = xExpectedIdleTime;
             }
+            grtc_next_tick += (uint64_t)diff * portNRF_GRTC_TICKS_PER_SYSTICK;
+
+            /* It is important that we clear pending here so that our corrections are latest and in sync with
+             * tick_interrupt handler. Done before re-arming: a compare armed in the past must still fire. */
+            grtc_event_compare_clear(portNRF_GRTC_CC_CH);
+            NVIC_ClearPendingIRQ(portNRF_GRTC_IRQn);
+
+            /* Re-enable periodic tick via compare */
+            grtc_cc_set(portNRF_GRTC_CC_CH, grtc_next_tick);
+            grtc_int_compare_enable(portNRF_GRTC_CC_CH);
 
             BaseType_t switch_req = pdFALSE;
 
