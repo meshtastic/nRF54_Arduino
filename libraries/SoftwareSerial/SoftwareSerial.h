@@ -24,6 +24,7 @@
 #include <inttypes.h>
 #include <Stream.h>
 #include <variant.h>
+#include <nrf.h>
 
 /******************************************************************************
 * Definitions
@@ -42,6 +43,7 @@ private:
   uint32_t _transmitBitMask;
   volatile uint32_t* _transmitPortRegister;
   volatile uint32_t _intMask;
+  NRF_GPIOTE_Type* _gpiote; // the instance _intMask refers to (by the RX pin's port), NULL on P2
 
   // Expressed as 4-cycle delays (must never be 0!)
   uint16_t _rx_delay_centering;

@@ -182,6 +182,15 @@ int attachInterrupt(uint32_t pin, voidFuncPtr callback, uint32_t mode)
   return (1 << ch);
 }
 
+NRF_GPIOTE_Type *digitalPinToGpiote(uint32_t pin)
+{
+  if (pin >= PINS_COUNT) {
+    return NULL;
+  }
+  gpiote_instance_t *inst = instanceForPin(g_ADigitalPinMap[pin]);
+  return inst ? inst->reg : NULL;
+}
+
 /*
  * \brief Turns off the given interrupt.
  */

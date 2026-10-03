@@ -20,6 +20,7 @@
 #define _WIRING_INTERRUPTS_
 
 #include <stdint.h>
+#include "nrf.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -45,6 +46,13 @@ typedef void (*voidFuncPtr)(void);
  * \return Interrupt Mask
  */
 int attachInterrupt(uint32_t pin, voidFuncPtr callback, uint32_t mode);
+
+/*
+ * \brief The GPIOTE instance that serves the given pin, or NULL when none does: P0 pins use
+ *        GPIOTE30, P1 pins GPIOTE20, and P2 has no GPIOTE. The mask returned by
+ *        attachInterrupt() refers to this instance's channels.
+ */
+NRF_GPIOTE_Type *digitalPinToGpiote(uint32_t pin);
 
 /*
  * \brief Turns off the given interrupt.

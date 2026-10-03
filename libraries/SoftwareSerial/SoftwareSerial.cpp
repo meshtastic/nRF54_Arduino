@@ -40,6 +40,8 @@ SoftwareSerial::SoftwareSerial(uint8_t receivePin, uint8_t transmitPin, bool inv
 {   
   _receivePin = receivePin;
   _transmitPin = transmitPin;
+  _intMask = 0;
+  _gpiote = NULL;
 }
 
 
@@ -85,6 +87,8 @@ bool SoftwareSerial::listen()
     _receive_buffer_head = _receive_buffer_tail = 0;
     active_object = this;
 
+    // attachInterrupt() returns a channel mask of the GPIOTE that serves the RX pin's port
+    _gpiote = digitalPinToGpiote(_receivePin);
     if(_inverse_logic)
         //Start bit high
        _intMask = attachInterrupt(_receivePin, handle_interrupt, RISING);
@@ -157,7 +161,7 @@ size_t SoftwareSerial::write(uint8_t b)
   if (inv)
     b = ~b;
   // turn off interrupts for a clean txmit
-   nrf_gpiote_int_disable(NRF_GPIOTE, _intMask);
+   if (_gpiote) nrf_gpiote_int_disable(_gpiote, _intMask);
   // Write the start bit
   if (inv)
     *reg |= reg_mask;
@@ -185,7 +189,7 @@ size_t SoftwareSerial::write(uint8_t b)
   else
     *reg |= reg_mask;
   
-  nrf_gpiote_int_enable(NRF_GPIOTE, _intMask);
+  if (_gpiote) nrf_gpiote_int_enable(_gpiote, _intMask);
   
   delayMicroseconds(delay);  
   
@@ -197,11 +201,11 @@ void SoftwareSerial::flush()
   if (!isListening())
     return;
 
-  nrf_gpiote_int_disable(NRF_GPIOTE, _intMask);
+  if (_gpiote) nrf_gpiote_int_disable(_gpiote, _intMask);
   
   _receive_buffer_head = _receive_buffer_tail = 0;
 
-  nrf_gpiote_int_enable(NRF_GPIOTE, _intMask);
+  if (_gpiote) nrf_gpiote_int_enable(_gpiote, _intMask);
 }
 
 int SoftwareSerial::peek()
@@ -229,7 +233,7 @@ void SoftwareSerial::recv()
   if (_inverse_logic ? rx_pin_read() : !rx_pin_read())
   {
 
-    nrf_gpiote_int_disable(NRF_GPIOTE, _intMask);
+    if (_gpiote) nrf_gpiote_int_disable(_gpiote, _intMask);
  
     // Wait approximately 1/2 of a bit width to "center" the sample
        delayMicroseconds(_rx_delay_centering);
@@ -287,7 +291,7 @@ void SoftwareSerial::recv()
     // skip the stop bit
    delayMicroseconds(_rx_delay_stopbit); 
 
-   nrf_gpiote_int_enable(NRF_GPIOTE, _intMask);  
+   if (_gpiote) nrf_gpiote_int_enable(_gpiote, _intMask);  
   }
 }
 
