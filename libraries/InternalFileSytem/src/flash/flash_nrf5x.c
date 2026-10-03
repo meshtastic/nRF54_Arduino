@@ -124,20 +124,41 @@ static void drain_soc_events (void)
   }
 }
 
-// Wait until every accepted operation has reported its completion, but never without a bound: the
-// SoC event normally arrives through the SoftDevice event task, yet a lost event would otherwise park
-// the calling task forever (seen on nRF54L15 during a BLE connection: the whole firmware froze in an
-// unbounded take here). Drain the SoC event queue ourselves while waiting so the completion cannot
-// get stuck behind a task that is not running, and hand any other SoC event to the application hook.
-static bool wait_flash_ops (void)
+// The write just issued has landed once dst reads back as src. The cache only programs chunks that
+// differ from the flash, so a match means the SoftDevice has written them and is done reading src,
+// which the caller is about to reuse. The counts alone cannot prove it: a completion that
+// sd_flash_write_wait() wrote off as lost may still arrive and make them match early.
+static bool flash_write_landed (uint32_t dst, uint32_t const * src, uint32_t n_words)
+{
+  return src == NULL || memcmp((void const *) dst, src, n_words * 4) == 0;
+}
+
+typedef enum
+{
+  FLASH_WAIT_DONE,
+  FLASH_WAIT_FAILED,  // every completion is in, the last one reported a failure and the data is not there
+  FLASH_WAIT_TIMEOUT,
+} flash_wait_t;
+
+// Wait until every accepted operation has reported its completion and, when src is given, the write
+// just issued has landed; but never without a bound: the SoC event normally arrives through the
+// SoftDevice event task, yet a lost event would otherwise park the calling task forever (seen on
+// nRF54L15 during a BLE connection: the whole firmware froze in an unbounded take here). Drain the
+// SoC event queue ourselves while waiting so the completion cannot get stuck behind a task that is
+// not running, and hand any other SoC event to the application hook.
+static flash_wait_t wait_flash_ops (uint32_t dst, uint32_t const * src, uint32_t n_words)
 {
   for (uint32_t slice = 0; slice < FLASH_NRF5X_WAIT_SLICES; slice++) {
-    if ( !flash_ops_outstanding() ) return true;
+    if ( !flash_ops_outstanding() ) {
+      if ( flash_write_landed(dst, src, n_words) ) return FLASH_WAIT_DONE;
+      if ( _flash_op_result == NRF_EVT_FLASH_OPERATION_ERROR ) return FLASH_WAIT_FAILED;
+    }
     // Only a wake-up: a give left by a completion counted earlier costs one more pass
     if (xSemaphoreTake(_sem, pdMS_TO_TICKS(FLASH_NRF5X_WAIT_SLICE_MS)) == pdTRUE) continue;
     drain_soc_events();
   }
-  return !flash_ops_outstanding();
+  if ( !flash_ops_outstanding() && flash_write_landed(dst, src, n_words) ) return FLASH_WAIT_DONE;
+  return FLASH_WAIT_TIMEOUT;
 }
 
 // Set once settling an outstanding write timed out, so the retries after BUSY do not wait again
@@ -153,7 +174,7 @@ static uint32_t sd_flash_write_wait (uint32_t dst, uint32_t const * src, uint32_
   // settle it first, so that completion cannot be taken for the one of the write issued here.
   uint32_t owed = flash_ops_outstanding();
   if (owed) {
-    if (!_settle_given_up && wait_flash_ops()) {
+    if (!_settle_given_up && wait_flash_ops(0, NULL, 0) == FLASH_WAIT_DONE) {
       owed = 0;
     } else {
       // Settling timed out, now or before a BUSY retry: take only what is already queued
@@ -177,40 +198,31 @@ static uint32_t sd_flash_write_wait (uint32_t dst, uint32_t const * src, uint32_
   _settle_given_up = false;
   if (owed) {
     // Accepted, so the earlier writes are finished, since the SoftDevice runs one at a time: another
-    // reader of the SoC event queue took their completions without passing them on. Write them off.
+    // reader of the SoC event queue most likely took their completions without passing them on.
+    // Write them off. One that was only late may still arrive and make the counts match early,
+    // which is why the wait below also requires the data to have landed.
     __atomic_fetch_add(&_ops_completed, owed, __ATOMIC_SEQ_CST);
     flash_nrf5x_stats.written_off += owed;
   }
 
-  bool const completed = wait_flash_ops();
+  flash_wait_t const waited = wait_flash_ops(dst, src, n_words);
   flash_nrf5x_stats.in_flight = 0;
-  if (!completed) {
+  if (waited == FLASH_WAIT_TIMEOUT) {
     // Left outstanding: the next write settles it before it is issued
     flash_nrf5x_stats.timeouts++;
     return NRF_ERROR_TIMEOUT;
   }
+
+  // General failure: retried like a lost completion
+  if (waited == FLASH_WAIT_FAILED) {
+    return NRF_ERROR_TIMEOUT;
+  }
+
   flash_nrf5x_stats.last_ticks = xTaskGetTickCount() - flash_nrf5x_stats.last_start;
   if (flash_nrf5x_stats.last_ticks > flash_nrf5x_stats.max_ticks) {
     flash_nrf5x_stats.max_ticks = flash_nrf5x_stats.last_ticks;
   }
-
-  // Completions arrive in order, so the last one is this write's.
-  // If completed successfully
-  if (_flash_op_result == NRF_EVT_FLASH_OPERATION_SUCCESS) {
-    result = NRF_SUCCESS;
-  }
-
-  // If general failure.
-  else if (_flash_op_result == NRF_EVT_FLASH_OPERATION_ERROR) {
-    result = NRF_ERROR_TIMEOUT;
-  }
-
-  // If this assert triggers, we need to implement a new NRF_SOC_EVTS value
-  else {
-    assert(false);
-  }
-
-  return result;
+  return NRF_SUCCESS;
 }
 
 // sd_flash_write() is a SoftDevice SVC; without the SoftDevice the RRAM controller is driven directly.
