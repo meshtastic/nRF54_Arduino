@@ -695,7 +695,12 @@ void adafruit_soc_task(void* arg)
             break;
 
             case NRF_EVT_RAND_SEED_REQUEST:
-              seed_softdevice_rng();
+              // An unanswered request leaves the SoftDevice RNG unseeded. A halted TRNG only recovers through end()/begin().
+              while ( !seed_softdevice_rng() )
+              {
+                nRF54Crypto.end();
+                delay(1);
+              }
             break;
 
             default: break;
