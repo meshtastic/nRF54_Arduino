@@ -665,6 +665,27 @@ extern "C" void SD_EVT_IRQHandler(void)
 #endif
 }
 
+// S145 requires the application to seed the RNG
+static void seed_softdevice_rng(void)
+{
+  uint8_t seed[SD_RAND_SEED_SIZE];
+  // Use FICR device ID and GRTC counter as entropy source
+  uint32_t* seed32 = (uint32_t*)seed;
+  for (uint32_t i = 0; i < SD_RAND_SEED_SIZE / 4; i++)
+  {
+    seed32[i] = NRF_FICR->INFO.DEVICEID[i & 1] ^ (uint32_t)(NRF_GRTC->SYSCOUNTER[0].SYSCOUNTERL + i);
+  }
+  sd_rand_seed_set(seed);
+}
+
+// The InternalFS flash driver drains the SoC event queue while it waits for a flash completion and
+// hands every other event to this hook, so a seed request it pulls out never reaches the SOC task
+// below. Weak: an application that reads the SoC events itself can take them over.
+extern "C" __attribute__((weak)) void flash_nrf5x_soc_event_hook(uint32_t soc_evt)
+{
+  if ( soc_evt == NRF_EVT_RAND_SEED_REQUEST ) seed_softdevice_rng();
+}
+
 /**
  * Handle SOC event such as FLASH operation
  */
@@ -694,17 +715,7 @@ void adafruit_soc_task(void* arg)
             break;
 
             case NRF_EVT_RAND_SEED_REQUEST:
-            {
-              // S145 requires the application to seed the RNG
-              uint8_t seed[SD_RAND_SEED_SIZE];
-              // Use FICR device ID and GRTC counter as entropy source
-              uint32_t* seed32 = (uint32_t*)seed;
-              for (uint32_t i = 0; i < SD_RAND_SEED_SIZE / 4; i++)
-              {
-                seed32[i] = NRF_FICR->INFO.DEVICEID[i & 1] ^ (uint32_t)(NRF_GRTC->SYSCOUNTER[0].SYSCOUNTERL + i);
-              }
-              sd_rand_seed_set(seed);
-            }
+              seed_softdevice_rng();
             break;
 
             default: break;

@@ -77,7 +77,8 @@ void flash_nrf5x_event_cb (uint32_t event)
 #define FLASH_NRF5X_WAIT_SLICE_MS 20
 
 // Application hook for SoC events drained here that are not flash completions
-// (power-failure warning, RNG seed request, ...). Weak: absent, they are dropped.
+// (power-failure warning, RNG seed request, ...). Bluefruit54Lib provides a weak default that
+// answers the RNG seed request; an application can override it. Absent, they are dropped.
 void flash_nrf5x_soc_event_hook(uint32_t event) __attribute__((weak));
 
 // When soft device is enabled, flash ops are async
