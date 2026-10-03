@@ -45,7 +45,6 @@ int flash_cache_write (flash_cache_t* fc, uint32_t dst, void const * src, uint32
 {
   uint8_t const * src8 = (uint8_t const *) src;
   uint32_t remain = len;
-  bool flushed_ok = true;
 
   // Program up to page boundary each loop
   while ( remain )
@@ -59,7 +58,8 @@ int flash_cache_write (flash_cache_t* fc, uint32_t dst, void const * src, uint32
     // Page changes, flush old and update new cache
     if ( page_addr != fc->cache_addr )
     {
-      if ( !flash_cache_flush(fc) ) flushed_ok = false;
+      // The old page holds writes already reported as done: keep it cached rather than replace it
+      if ( !flash_cache_flush(fc) ) return -1;
       fc->cache_addr = page_addr;
 
       // read a whole page from flash
@@ -74,7 +74,7 @@ int flash_cache_write (flash_cache_t* fc, uint32_t dst, void const * src, uint32
     dst += wr_bytes;
   }
 
-  return flushed_ok ? (int) (len - remain) : -1;
+  return (int) (len - remain);
 }
 
 bool flash_cache_flush (flash_cache_t* fc)
@@ -126,7 +126,9 @@ bool flash_cache_flush (flash_cache_t* fc)
     if ( led ) ledOff(LED_BUILTIN);
   }
 
-  fc->cache_addr = FLASH_CACHE_INVALID_ADDR;
+  // On failure the page stays cached, so its data is neither lost nor read back stale, and the
+  // next flush writes it again (on RRAM, only the chunks that still differ).
+  if ( ok ) fc->cache_addr = FLASH_CACHE_INVALID_ADDR;
   return ok;
 }
 

@@ -79,7 +79,8 @@ static int _internal_flash_erase (const struct lfs_config *c, lfs_block_t block)
   // implement as write 0xff to whole block address
   for(int i=0; i <LFS_BLOCK_SIZE; i++)
   {
-    flash_nrf5x_write8(addr + i, 0xFF);
+    // A failed page flush leaves the rest of the block unerased: report it, as prog does
+    if ( flash_nrf5x_write8(addr + i, 0xFF) != 1 ) return LFS_ERR_IO;
   }
 
   // flash_nrf5x_flush();

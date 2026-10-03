@@ -52,9 +52,10 @@ typedef struct
 extern "C" {
 #endif
 
-// Returns count, or -1 when a page flush forced by this write failed (the data is still cached).
+// Returns count, or -1 when a page flush forced by this write failed. The page that could not be
+// flushed stays cached, and the data of this write is not taken (part of it may be, when it spans pages).
 int flash_cache_write (flash_cache_t* fc, uint32_t dst, void const *src, uint32_t count);
-// Returns false when the page could not be written completely; the cache is dropped either way.
+// Returns false when the page could not be written completely; it then stays cached for the next flush.
 bool flash_cache_flush (flash_cache_t* fc);
 int flash_cache_read (flash_cache_t* fc, void* dst, uint32_t addr, uint32_t count);
 
