@@ -54,6 +54,7 @@ typedef struct
   uint32_t last_ticks;   // duration of the last completed operation, RTOS ticks
   uint32_t max_ticks;    // longest completed operation
   uint32_t last_result;  // NRF_SUCCESS or the last error code
+  uint32_t written_off;  // completions given up as lost once the SoftDevice accepted a later operation
 } flash_nrf5x_stats_t;
 
 extern flash_nrf5x_stats_t flash_nrf5x_stats;
