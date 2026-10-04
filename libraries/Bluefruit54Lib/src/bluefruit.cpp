@@ -84,6 +84,14 @@ static void bluefruit_blinky_cb( TimerHandle_t xTimer )
 #endif
 }
 
+// s145 has no entropy source of its own and asks the application for a seed (NRF_EVT_RAND_SEED_REQUEST).
+// The RNG is left running: LESC key generation draws from it on another task.
+static bool seed_softdevice_rng(void)
+{
+  uint8_t seed[SD_RAND_SEED_SIZE];
+  return nRF54Crypto.begin() && nRF54Crypto.random(seed, sizeof(seed)) && (sd_rand_seed_set(seed) == NRF_SUCCESS);
+}
+
 static void nrf_error_cb(uint32_t id, uint32_t pc, uint32_t info)
 {
 #if CFG_DEBUG
@@ -288,15 +296,8 @@ bool AdafruitBluefruit::begin(uint8_t prph_count, uint8_t central_count)
   if ( sd_err != NRF_SUCCESS ) sd_isr_forwarding_disable();
   VERIFY_STATUS( sd_err, false );
 
-  // s145 asks for a seed (NRF_EVT_RAND_SEED_REQUEST) and sd_ble_enable() fails with INVALID_STATE without one
-  {
-    uint8_t seed[SD_RAND_SEED_SIZE];
-    nRF54Crypto.begin();
-    bool seeded = nRF54Crypto.random(seed, sizeof(seed));
-    nRF54Crypto.end();
-    VERIFY(seeded, false);
-    VERIFY_STATUS( sd_rand_seed_set(seed), false );
-  }
+  // sd_ble_enable() fails with INVALID_STATE until the RNG is seeded
+  VERIFY( seed_softdevice_rng(), false );
 
   /*------------------------------------------------------------------*/
   /*  SoftDevice Default Configuration depending on the number of
@@ -665,25 +666,19 @@ extern "C" void SD_EVT_IRQHandler(void)
 #endif
 }
 
-// S145 requires the application to seed the RNG
-static void seed_softdevice_rng(void)
-{
-  uint8_t seed[SD_RAND_SEED_SIZE];
-  // Use FICR device ID and GRTC counter as entropy source
-  uint32_t* seed32 = (uint32_t*)seed;
-  for (uint32_t i = 0; i < SD_RAND_SEED_SIZE / 4; i++)
-  {
-    seed32[i] = NRF_FICR->INFO.DEVICEID[i & 1] ^ (uint32_t)(NRF_GRTC->SYSCOUNTER[0].SYSCOUNTERL + i);
-  }
-  sd_rand_seed_set(seed);
-}
+// An unanswered seed request leaves the SoftDevice RNG unseeded, so the SOC task retries a failed seed
+// between event batches rather than inline, where it would hold up flash completions.
+static volatile bool _seed_pending = false;
 
 // The InternalFS flash driver drains the SoC event queue while it waits for a flash completion and
 // hands every other event to this hook, so a seed request it pulls out never reaches the SOC task
-// below. Weak: an application that reads the SoC events itself can take them over.
+// below: pass it on, waking the task through SD_EVT_IRQn. Weak: an application that reads the SoC
+// events itself can take them over.
 extern "C" __attribute__((weak)) void flash_nrf5x_soc_event_hook(uint32_t soc_evt)
 {
-  if ( soc_evt == NRF_EVT_RAND_SEED_REQUEST ) seed_softdevice_rng();
+  if ( soc_evt != NRF_EVT_RAND_SEED_REQUEST ) return;
+  _seed_pending = true;
+  NVIC_SetPendingIRQ(SD_EVT_IRQn);
 }
 
 /**
@@ -695,7 +690,14 @@ void adafruit_soc_task(void* arg)
 
   while (1)
   {
-    if ( xSemaphoreTake(Bluefruit._soc_event_sem, portMAX_DELAY) )
+    // Cleared first, so a request the flash hook passes on meanwhile is not lost
+    if ( _seed_pending )
+    {
+      _seed_pending = false;
+      if ( !seed_softdevice_rng() ) _seed_pending = true;
+    }
+
+    if ( xSemaphoreTake(Bluefruit._soc_event_sem, _seed_pending ? pdMS_TO_TICKS(10) : portMAX_DELAY) )
     {
       uint32_t soc_evt;
       uint32_t err = ERROR_NONE;
@@ -715,7 +717,7 @@ void adafruit_soc_task(void* arg)
             break;
 
             case NRF_EVT_RAND_SEED_REQUEST:
-              seed_softdevice_rng();
+              _seed_pending = true;
             break;
 
             default: break;

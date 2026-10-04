@@ -45,18 +45,32 @@ nRF54CryptoClass nRF54Crypto;
 
 static bool _rng_started = false;
 
+// Enable with 1x 128-bit block for AES conditioning
+static void cracen_rng_control(bool soft_reset)
+{
+    nrf_cracen_rng_control_t cfg = { 0 };
+    cfg.enable = true;
+    cfg.number_128_blocks = 1;
+    cfg.soft_reset = soft_reset;
+    nrf_cracen_rng_control_set(NRF_CRACENCORE, &cfg);
+}
+
+// A halted generator needs a soft reset before it produces again. Done in place rather than through
+// stop/start, so a reader on another task never finds the RNG disabled under it.
+static void cracen_rng_reset_if_halted(void)
+{
+    if (nrf_cracen_rng_fsm_state_get(NRF_CRACENCORE) != NRF_CRACEN_RNG_FSM_STATE_ERROR) return;
+    cracen_rng_control(true);
+    cracen_rng_control(false);
+}
+
 static bool cracen_rng_start(void)
 {
     if (_rng_started) return true;
 
     // Enable CRACEN RNG module
     nrf_cracen_module_enable(NRF_CRACEN, NRF_CRACEN_MODULE_RNG_MASK);
-
-    // Configure RNG: enable with 1x 128-bit block for AES conditioning
-    nrf_cracen_rng_control_t cfg = { 0 };
-    cfg.enable = true;
-    cfg.number_128_blocks = 1;
-    nrf_cracen_rng_control_set(NRF_CRACENCORE, &cfg);
+    cracen_rng_control(false);
 
     // Wait for the FSM to leave RESET/STARTUP; a full FIFO parks it in IDLE_STANDBY (rings off)
     uint32_t timeout = RNG_TIMEOUT;
@@ -68,13 +82,7 @@ static bool cracen_rng_start(void)
             _rng_started = true;
             return true;
         }
-        if (state == NRF_CRACEN_RNG_FSM_STATE_ERROR) {
-            // A halted generator needs a soft reset before it restarts
-            cfg.soft_reset = true;
-            nrf_cracen_rng_control_set(NRF_CRACENCORE, &cfg);
-            cfg.soft_reset = false;
-            nrf_cracen_rng_control_set(NRF_CRACENCORE, &cfg);
-        }
+        cracen_rng_reset_if_halted();
     }
     return false;
 }
@@ -92,20 +100,33 @@ static void cracen_rng_stop(void)
     _rng_started = false;
 }
 
+// Readers run on different tasks (SoftDevice seed requests, LESC key generation). Another reader, or
+// a reset clearing the FIFO, between the level check and the read would hand out a word that is not
+// random, so the two happen in one critical section. Waiting for data stays outside it.
+static bool cracen_rng_word(uint32_t *word)
+{
+    taskENTER_CRITICAL();
+    bool got = nrf_cracen_rng_fifo_level_get(NRF_CRACENCORE) > 0;
+    if (got) {
+        *word = nrf_cracen_rng_fifo_get(NRF_CRACENCORE);
+    } else {
+        cracen_rng_reset_if_halted();
+    }
+    taskEXIT_CRITICAL();
+    return got;
+}
+
 static bool cracen_rng_fill(uint8_t *dest, size_t len)
 {
     if (!_rng_started) return false;
 
     size_t offset = 0;
     while (offset < len) {
-        // Wait for FIFO to have data
+        uint32_t word;
         uint32_t timeout = RNG_TIMEOUT;
-        while (nrf_cracen_rng_fifo_level_get(NRF_CRACENCORE) == 0) {
+        while (!cracen_rng_word(&word)) {
             if (--timeout == 0) return false;
         }
-
-        // Read a 32-bit random word
-        uint32_t word = nrf_cracen_rng_fifo_get(NRF_CRACENCORE);
 
         // Copy bytes (handle partial word at end)
         size_t remaining = len - offset;
