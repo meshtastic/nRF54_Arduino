@@ -673,9 +673,20 @@ void adafruit_soc_task(void* arg)
 {
   (void) arg;
 
+  // An unanswered seed request leaves the SoftDevice RNG unseeded, so a failed seed is retried between
+  // event batches rather than inline, where it would hold up flash completions.
+  bool seed_pending = false;
+
   while (1)
   {
-    if ( xSemaphoreTake(Bluefruit._soc_event_sem, portMAX_DELAY) )
+    if ( seed_pending )
+    {
+      seed_pending = !seed_softdevice_rng();
+      // A halted TRNG only recovers through end()/begin()
+      if ( seed_pending ) nRF54Crypto.end();
+    }
+
+    if ( xSemaphoreTake(Bluefruit._soc_event_sem, seed_pending ? pdMS_TO_TICKS(10) : portMAX_DELAY) )
     {
       uint32_t soc_evt;
       uint32_t err = ERROR_NONE;
@@ -695,12 +706,7 @@ void adafruit_soc_task(void* arg)
             break;
 
             case NRF_EVT_RAND_SEED_REQUEST:
-              // An unanswered request leaves the SoftDevice RNG unseeded. A halted TRNG only recovers through end()/begin().
-              while ( !seed_softdevice_rng() )
-              {
-                nRF54Crypto.end();
-                delay(1);
-              }
+              seed_pending = true;
             break;
 
             default: break;
