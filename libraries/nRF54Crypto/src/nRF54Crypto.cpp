@@ -100,21 +100,33 @@ static void cracen_rng_stop(void)
     _rng_started = false;
 }
 
-static bool cracen_rng_fill_unlocked(uint8_t *dest, size_t len)
+// Readers run on different tasks (SoftDevice seed requests, LESC key generation). Another reader, or
+// a reset clearing the FIFO, between the level check and the read would hand out a word that is not
+// random, so the two happen in one critical section. Waiting for data stays outside it.
+static bool cracen_rng_word(uint32_t *word)
+{
+    taskENTER_CRITICAL();
+    bool got = nrf_cracen_rng_fifo_level_get(NRF_CRACENCORE) > 0;
+    if (got) {
+        *word = nrf_cracen_rng_fifo_get(NRF_CRACENCORE);
+    } else {
+        cracen_rng_reset_if_halted();
+    }
+    taskEXIT_CRITICAL();
+    return got;
+}
+
+static bool cracen_rng_fill(uint8_t *dest, size_t len)
 {
     if (!_rng_started) return false;
 
     size_t offset = 0;
     while (offset < len) {
-        // Wait for FIFO to have data
+        uint32_t word;
         uint32_t timeout = RNG_TIMEOUT;
-        while (nrf_cracen_rng_fifo_level_get(NRF_CRACENCORE) == 0) {
+        while (!cracen_rng_word(&word)) {
             if (--timeout == 0) return false;
-            cracen_rng_reset_if_halted();
         }
-
-        // Read a 32-bit random word
-        uint32_t word = nrf_cracen_rng_fifo_get(NRF_CRACENCORE);
 
         // Copy bytes (handle partial word at end)
         size_t remaining = len - offset;
@@ -123,17 +135,6 @@ static bool cracen_rng_fill_unlocked(uint8_t *dest, size_t len)
         offset += to_copy;
     }
     return true;
-}
-
-// Readers run on different tasks (SoftDevice seed requests, LESC key generation). Another reader, or
-// a reset clearing the FIFO, between the level check and the read would hand out a word that is not
-// random. Suspending the scheduler is the lock: a fill takes microseconds unless the generator is failing.
-static bool cracen_rng_fill(uint8_t *dest, size_t len)
-{
-    vTaskSuspendAll();
-    bool ok = cracen_rng_fill_unlocked(dest, len);
-    (void) xTaskResumeAll();
-    return ok;
 }
 
 //--------------------------------------------------------------------+
