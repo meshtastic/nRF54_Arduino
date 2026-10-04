@@ -100,7 +100,7 @@ static void cracen_rng_stop(void)
     _rng_started = false;
 }
 
-static bool cracen_rng_fill(uint8_t *dest, size_t len)
+static bool cracen_rng_fill_unlocked(uint8_t *dest, size_t len)
 {
     if (!_rng_started) return false;
 
@@ -123,6 +123,17 @@ static bool cracen_rng_fill(uint8_t *dest, size_t len)
         offset += to_copy;
     }
     return true;
+}
+
+// Readers run on different tasks (SoftDevice seed requests, LESC key generation). Another reader, or
+// a reset clearing the FIFO, between the level check and the read would hand out a word that is not
+// random. Suspending the scheduler is the lock: a fill takes microseconds unless the generator is failing.
+static bool cracen_rng_fill(uint8_t *dest, size_t len)
+{
+    vTaskSuspendAll();
+    bool ok = cracen_rng_fill_unlocked(dest, len);
+    (void) xTaskResumeAll();
+    return ok;
 }
 
 //--------------------------------------------------------------------+
