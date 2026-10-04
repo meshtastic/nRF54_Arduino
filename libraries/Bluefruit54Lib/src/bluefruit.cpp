@@ -679,12 +679,7 @@ void adafruit_soc_task(void* arg)
 
   while (1)
   {
-    if ( seed_pending )
-    {
-      seed_pending = !seed_softdevice_rng();
-      // A halted TRNG only recovers through end()/begin()
-      if ( seed_pending ) nRF54Crypto.end();
-    }
+    if ( seed_pending ) seed_pending = !seed_softdevice_rng();
 
     if ( xSemaphoreTake(Bluefruit._soc_event_sem, seed_pending ? pdMS_TO_TICKS(10) : portMAX_DELAY) )
     {
