@@ -330,7 +330,8 @@ static flash_cache_t _cache =
   .verify     = fal_verify,
 
   .cache_addr = FLASH_CACHE_INVALID_ADDR,
-  .cache_buf  = _cache_buffer
+  .cache_buf  = _cache_buffer,
+  .pages_dropped = &flash_nrf5x_stats.pages_dropped
 };
 
 //--------------------------------------------------------------------+

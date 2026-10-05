@@ -44,6 +44,7 @@ typedef struct
     uint32_t cache_addr;
     uint8_t* cache_buf;
     uint8_t  flush_failures; // consecutive failed flushes of the cached page
+    uint32_t* pages_dropped; // counts pages given up after FLASH_CACHE_MAX_FLUSH_FAILURES, may be NULL
 } flash_cache_t;
 
 #ifdef __cplusplus

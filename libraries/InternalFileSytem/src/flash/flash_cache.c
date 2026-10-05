@@ -118,6 +118,8 @@ bool flash_cache_flush (flash_cache_t* fc)
   // included, and its data does not survive a reboot anyway.
   if ( ok || ++fc->flush_failures >= FLASH_CACHE_MAX_FLUSH_FAILURES )
   {
+    // Writes already reported as done are lost with it
+    if ( !ok && fc->pages_dropped ) (*fc->pages_dropped)++;
     fc->cache_addr = FLASH_CACHE_INVALID_ADDR;
     fc->flush_failures = 0;
   }
