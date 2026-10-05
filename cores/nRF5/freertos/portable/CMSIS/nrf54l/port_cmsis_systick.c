@@ -98,9 +98,30 @@ static inline void grtc_int_compare_disable(uint32_t cc_channel)
 
 /*-----------------------------------------------------------*/
 
-/* SYSCOUNTER value at which the next OS tick falls due. Ticks stay on this grid, which starts with
- * the scheduler, instead of being re-armed one period after whenever the interrupt happened to run. */
-static uint64_t grtc_next_tick;
+/* OS ticks stay on a grid that starts with the scheduler, instead of being re-armed one period after
+ * whenever the interrupt happened to run. Grid tick n falls at grtc_tick_base + ceil(n * 10^6 /
+ * configTICK_RATE_HZ) us: 10^6 / 1024 is not an integer, and stepping by the truncated
+ * portNRF_GRTC_TICKS_PER_SYSTICK (976 us) ran the tick count, and millis() with it, 576 ppm fast,
+ * about 50 s a day. Rounding up makes tick n due exactly when grtc_ticks_due() counts it. */
+static uint64_t grtc_tick_base;
+/* Grid ticks accounted so far; the next one falls due at grtc_tick_time(grtc_ticks + 1) */
+static uint64_t grtc_ticks;
+
+static inline uint64_t grtc_tick_offset(uint64_t n)
+{
+    return (n * configSYSTICK_CLOCK_HZ + configTICK_RATE_HZ - 1) / configTICK_RATE_HZ;
+}
+
+static inline uint64_t grtc_tick_time(uint64_t n)
+{
+    return grtc_tick_base + grtc_tick_offset(n);
+}
+
+/* Grid ticks that have fallen due by SYSCOUNTER value now */
+static inline uint64_t grtc_ticks_due(uint64_t now)
+{
+    return (now - grtc_tick_base) * configTICK_RATE_HZ / configSYSTICK_CLOCK_HZ;
+}
 
 /* A backlog (core halted in a debugger, a long critical section) is caught up at most this many
  * ticks per interrupt, so the ISR stays short; the compare is then left behind and fires again. */
@@ -123,12 +144,12 @@ void xPortSysTickHandler( void )
     if (configUSE_DISABLE_TICK_AUTO_CORRECTION_DEBUG == 0)
     {
         /* Auto-correct missed ticks: every grid tick that has fallen due.
-         * GRTC runs at configSYSTICK_CLOCK_HZ (1 MHz).
-         * Each OS tick = portNRF_GRTC_TICKS_PER_SYSTICK GRTC ticks. */
+         * GRTC runs at configSYSTICK_CLOCK_HZ (1 MHz). */
         TickType_t diff = 0;
-        if (now >= grtc_next_tick)
+        uint64_t const due = grtc_ticks_due(now);
+        if (due > grtc_ticks)
         {
-            diff = (TickType_t)((now - grtc_next_tick) / portNRF_GRTC_TICKS_PER_SYSTICK) + 1;
+            diff = (TickType_t)(due - grtc_ticks);
         }
 
         /* At most 1 step if scheduler is suspended */
@@ -142,7 +163,7 @@ void xPortSysTickHandler( void )
             diff = portNRF_GRTC_CATCHUP_MAX;
         }
 
-        grtc_next_tick += (uint64_t)diff * portNRF_GRTC_TICKS_PER_SYSTICK;
+        grtc_ticks += diff;
         while ((diff--) > 0)
         {
             switch_req |= xTaskIncrementTick();
@@ -151,14 +172,16 @@ void xPortSysTickHandler( void )
     else
     {
         switch_req = xTaskIncrementTick();
-        grtc_next_tick = now + portNRF_GRTC_TICKS_PER_SYSTICK;
+        /* Move the grid so that the next tick falls one period from now */
+        grtc_ticks++;
+        grtc_tick_base = now - grtc_tick_offset(grtc_ticks);
     }
 
     /* Schedule next compare: the next tick on the grid. When ticks are still due it lies in the past
      * and fires at once, except while the scheduler is suspended, which would only spin through here:
      * then wait one tick period. */
     {
-        uint64_t next_cc = grtc_next_tick;
+        uint64_t next_cc = grtc_tick_time(grtc_ticks + 1);
         if ((next_cc <= now) && (xTaskGetSchedulerState() == taskSCHEDULER_SUSPENDED))
         {
             next_cc = now + portNRF_GRTC_TICKS_PER_SYSTICK;
@@ -227,8 +250,9 @@ void vPortSetupTimerInterrupt( void )
     grtc_event_compare_clear(portNRF_GRTC_CC_CH);
 
     /* First tick one period from now: the grid starts here */
-    grtc_next_tick = grtc_counter_get() + portNRF_GRTC_TICKS_PER_SYSTICK;
-    grtc_cc_set(portNRF_GRTC_CC_CH, grtc_next_tick);
+    grtc_tick_base = grtc_counter_get();
+    grtc_ticks = 0;
+    grtc_cc_set(portNRF_GRTC_CC_CH, grtc_tick_time(1));
 
     /* Enable compare interrupt */
     grtc_int_compare_enable(portNRF_GRTC_CC_CH);
@@ -257,9 +281,9 @@ void vPortSuppressTicksAndSleep( TickType_t xExpectedIdleTime )
     if ( eTaskConfirmSleepModeStatus() != eAbortSleep )
     {
         TickType_t xModifiableIdleTime;
-        /* Wake on the grid, when the tick that unblocks a task falls due: the next tick is due at
-         * grtc_next_tick and xExpectedIdleTime counts it. */
-        uint64_t const wakeupTime = grtc_next_tick + (uint64_t)(xExpectedIdleTime - 1) * portNRF_GRTC_TICKS_PER_SYSTICK;
+        /* Wake on the grid, when the tick that unblocks a task falls due: xExpectedIdleTime counts
+         * the next tick, grtc_ticks + 1. */
+        uint64_t const wakeupTime = grtc_tick_time(grtc_ticks + xExpectedIdleTime);
 
         /* Disable periodic tick interrupt, use compare for wakeup */
         grtc_int_compare_disable(portNRF_GRTC_CC_CH);
@@ -310,10 +334,10 @@ void vPortSuppressTicksAndSleep( TickType_t xExpectedIdleTime )
         {
             /* Whole grid ticks that fell due while asleep */
             TickType_t diff = 0;
-            uint64_t const exitTime = grtc_counter_get();
-            if (exitTime >= grtc_next_tick)
+            uint64_t const due = grtc_ticks_due(grtc_counter_get());
+            if (due > grtc_ticks)
             {
-                diff = (TickType_t)((exitTime - grtc_next_tick) / portNRF_GRTC_TICKS_PER_SYSTICK) + 1;
+                diff = (TickType_t)(due - grtc_ticks);
             }
 
             /* vTaskStepTick() must not pass the unblock tick. Ticks beyond it stay due, and the tick
@@ -322,7 +346,7 @@ void vPortSuppressTicksAndSleep( TickType_t xExpectedIdleTime )
             {
                 diff = xExpectedIdleTime;
             }
-            grtc_next_tick += (uint64_t)diff * portNRF_GRTC_TICKS_PER_SYSTICK;
+            grtc_ticks += diff;
 
             /* It is important that we clear pending here so that our corrections are latest and in sync with
              * tick_interrupt handler. Done before re-arming: a compare armed in the past must still fire. */
@@ -330,7 +354,7 @@ void vPortSuppressTicksAndSleep( TickType_t xExpectedIdleTime )
             NVIC_ClearPendingIRQ(portNRF_GRTC_IRQn);
 
             /* Re-enable periodic tick via compare */
-            grtc_cc_set(portNRF_GRTC_CC_CH, grtc_next_tick);
+            grtc_cc_set(portNRF_GRTC_CC_CH, grtc_tick_time(grtc_ticks + 1));
             grtc_int_compare_enable(portNRF_GRTC_CC_CH);
 
             BaseType_t switch_req = pdFALSE;
