@@ -106,6 +106,8 @@ bool SoftwareSerial::stopListening()
    if (active_object == this)
    {
      detachInterrupt(_receivePin);
+     // The channel may go to another pin now: write() must stop masking it
+     _gpiote = NULL;
      active_object = NULL;
      return true;
    }
