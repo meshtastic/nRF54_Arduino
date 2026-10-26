@@ -1,6 +1,6 @@
 # Bluefruit54Lib
 
-Arduino BLE API for Nordic nRF54L with the **s145 SoftDevice 9.0.0**.
+Arduino BLE API for Nordic nRF54L with the **s145 SoftDevice 10.0.1**.
 
 Wraps the SoftDevice's GAP / GATT / SMP SVC calls behind the
 peripheral / central / characteristic / service classes that originated

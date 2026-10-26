@@ -60,13 +60,13 @@ extern "C" {
  * @{ */
 
 /** @brief The major version for the SoftDevice binary distributed with this header file. */
-#define SD_MAJOR_VERSION  (9)
+#define SD_MAJOR_VERSION  (10)
 
 /** @brief The minor version for the SoftDevice binary distributed with this header file. */
 #define SD_MINOR_VERSION  (0)
 
 /** @brief The bugfix version for the SoftDevice binary distributed with this header file. */
-#define SD_BUGFIX_VERSION (0)
+#define SD_BUGFIX_VERSION (1)
 
 /** @brief The SoftDevice variant of this firmware. */
 #define SD_VARIANT_ID 145
@@ -125,7 +125,7 @@ the start of the SoftDevice */
 #define SD_SIZE_GET(baseaddr) (*((uint32_t *) ((baseaddr) + SD_SIZE_OFFSET)))
 
 /** @brief Defines the amount of flash that is used by the SoftDevice. */
-#define SD_FLASH_SIZE 0x24000
+#define SD_FLASH_SIZE 0x22400
 
 /** @brief Defines a macro for retrieving the actual FWID value from a given base address. */
 #define SD_FWID_GET(baseaddr) (*((uint16_t *) ((baseaddr) + SD_FWID_OFFSET)))

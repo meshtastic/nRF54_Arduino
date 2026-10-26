@@ -1,6 +1,5 @@
-/* nRF54L10 application with the s145 v9.0.0 SoftDevice.
- * RRAM 0x0-0x8000 is the bootloader (it owns reset), the SoftDevice sits at the top of RRAM.
- * The SoftDevice base is derived from the L15 image size and unverified on hardware. */
+/* nRF54L10 application with the s145 v10.0.1 SoftDevice.
+ * RRAM 0x0-0x8000 is the bootloader (it owns reset), the SoftDevice sits at the top of RRAM. */
 SEARCH_DIR(.)
 GROUP(-lgcc -lc -lnosys)
 
@@ -13,6 +12,6 @@ MEMORY
   NOINIT (rwx) :  ORIGIN = 0x2003FF80, LENGTH = 0x78
 }
 
-__softdevice_start__ = 0x000D8C00;
+__softdevice_start__ = 0x000DA800;
 
 INCLUDE "nrf54_common.ld"
