@@ -85,7 +85,8 @@ of RRAM.
 | nRF54L15 | `0x0 – 0x8000` | `0x8000 – 0x147000` | `0x147000 – 0x14E000` | `0x14F000` | `0x15A800` |
 
 RAM: `0x20000000 – 0x20004800` belongs to the SoftDevice, the application
-runs from `0x20004800` to `0x2003FF80`; the last 128 bytes hold the
+runs from `0x20004800` to `0x20017F80` / `0x2002FF80` / `0x2003FF80` (L05 /
+L10 / L15); the last 128 bytes of RAM hold the
 bootloader's BLE peer data and double-reset marker. The layout matches the
 [nRF54_Bootloader](https://github.com/meshtastic/nRF54_Bootloader) linker
 scripts.
