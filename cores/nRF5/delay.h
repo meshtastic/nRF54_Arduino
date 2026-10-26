@@ -57,7 +57,8 @@ static inline uint32_t micros( void ) __attribute__((always_inline));
 static inline uint32_t micros( void )
 {
   // Use DWT cycle count if it is enabled, otherwise use rtos tick
-  return dwt_enabled() ? (DWT->CYCCNT / 64) : tick2us(xTaskGetTickCount());
+  return dwt_enabled() ? (DWT->CYCCNT / (SystemCoreClock / 1000000UL))
+                       : tick2us(xTaskGetTickCount());
 }
 
 /**

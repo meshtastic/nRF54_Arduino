@@ -347,6 +347,16 @@ LoopClearBss:
 
 RunMain:
     bl SystemInit
+
+    /* SystemCoreClock starts at its 64 MHz default, but SystemInit has set the
+     * PLL to 128 MHz. Correct it before global constructors can time anything. */
+    bl SystemCoreClockUpdate
+
+    /* The RRAM cache is off after reset. On before the global constructors, so all
+     * code runs cached, which is also what nrfx_coredep_delay_us() is costed for
+     * (3 cycles per loop iteration; about 8 from RRAM). */
+    bl nrf54_cache_enable
+
     bl __libc_init_array
     cpsie i
     bl main

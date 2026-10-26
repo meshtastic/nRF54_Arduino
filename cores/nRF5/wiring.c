@@ -19,6 +19,7 @@
 
 #include "Arduino.h"
 #include "nrf.h"
+#include "nrf_cache.h"
 #include "nrf_nvic.h"
 #include "sd_isr.h"
 
@@ -31,6 +32,12 @@ nrf_nvic_state_t nrf_nvic_state;
 #define BOOTLOADER_VERSION_REGISTER     NRF_TIMER22->CC[0]
 uint32_t bootloaderVersion = 0;
 static uint32_t _reset_reason = 0;
+
+// Called from Reset_Handler (startup_nrf54l15.S), before the global constructors
+void nrf54_cache_enable( void )
+{
+  nrf_cache_enable(NRF_ICACHE);
+}
 
 void init( void )
 {
