@@ -1,5 +1,38 @@
 # Changelog
 
+## 0.5.0 — 2026-10-26
+
+Requires s145 10.0.1, bootloader 0.5.0 and a platform with the 10.0.1 boards.
+Boards on s145 9.0.0 can't update by DFU: reflash the SoftDevice, the
+bootloader and the application over SWD once. Without a chip erase, InternalFS
+(config, BLE bonds) is kept.
+
+- s145 10.0.1 on nRF54L05/L10/L15: SoftDevice base 0x5A800 / 0xDA800 /
+  0x15A800, linker scripts `nrf54l{05,10,15}_s145_v10.ld` (the v9 scripts are
+  gone), SoftDevice files split by SoC family
+  (`s145_nrf54l_10.0.1_API/`, `bootloader/s145/10.0.1/nrf54l/`).
+  `NRF_EVT_RADIO_CANCELED` is gone from the API and the SoC events after it
+  are renumbered
+- RRAM instruction cache on from `Reset_Handler`: code runs 3.4-3.9x faster
+- `SystemCoreClock` reports the 128 MHz the PLL runs at; `delayMicroseconds()`
+  is accurate and `micros()` on the DWT cycle counter scales by it. Known:
+  `pulseIn()` reports about 0.4x the real width
+- nRF54Crypto runs the TRNG only while a draw takes from it, one draw at a
+  time, with a new conditioning key each; `begin()`/`end()` no longer start
+  or stop it
+- LESC pairing is refused without a key pair, and a failed ECDH is answered
+  with a DHKey failure
+- MDK 8.75.1, with the nRF54LM20A device headers
+
+## 0.3.1 — 2026-10-05
+
+- SoftDevice RNG seeded from the CRACEN TRNG on every request
+- Tickless idle hang fixed (GRTC `TIMEOUT`/`WAKETIME` set), plus five more
+  nRF54L15 bring-up fixes
+- FreeRTOS tick on exact 1/1024 s boundaries
+- `SoftwareSerial::stopListening()` no longer masks the GPIOTE channel
+- InternalFS counts the cache pages it drops after repeated flush failures
+
 ## 0.3.0 — 2026-09-14
 
 - Documentation describes the s145 layout (application at `0x8000`, SoftDevice
