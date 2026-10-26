@@ -89,6 +89,9 @@ class BLESecurity
   #endif
     uint8_t _pubkey[1+BLE_GAP_LESC_P256_PK_LEN];      // our public key: 1 header + 64 data
     uint8_t _peer_pubkey[1+BLE_GAP_LESC_P256_PK_LEN]; // peer public key when using LESC
+    bool _lesc_keys;             // _private_key and _pubkey hold a generated key pair
+
+    bool _genLescKeys(void);
 #endif
 
     bond_keys_t  _bond_keys; // Shared keys with bonded device during securing connection, size ~ 80 bytes

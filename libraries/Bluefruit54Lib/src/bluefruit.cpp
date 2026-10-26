@@ -85,7 +85,7 @@ static void bluefruit_blinky_cb( TimerHandle_t xTimer )
 }
 
 // s145 has no entropy source of its own and asks the application for a seed (NRF_EVT_RAND_SEED_REQUEST).
-// The RNG is left running: LESC key generation draws from it on another task.
+// nRF54Crypto runs the TRNG only for each draw, LESC key generation's included.
 static bool seed_softdevice_rng(void)
 {
   uint8_t seed[SD_RAND_SEED_SIZE];

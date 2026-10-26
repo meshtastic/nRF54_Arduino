@@ -90,11 +90,24 @@ BLESecurity::BLESecurity(void)
   _passkey_req_cb = NULL;
   _complete_cb = NULL;
   _secured_cb = NULL;
+#if LESC_CRYPTO_AVAILABLE
+  _lesc_keys = false;
+#endif
 }
 
 bool BLESecurity::begin(void)
 {
 #if LESC_CRYPTO_AVAILABLE
+  // If this fails, the next pairing tries again before it needs the key pair
+  _lesc_keys = _genLescKeys();
+#endif
+
+  return true;
+}
+
+#if LESC_CRYPTO_AVAILABLE
+bool BLESecurity::_genLescKeys(void)
+{
   #ifdef NRF_CRYPTOCELL
   // Initalize Crypto lib for LESC (safe to call multiple times)
   nRFCrypto.begin();
@@ -118,7 +131,7 @@ bool BLESecurity::begin(void)
 
   // Generate P-256 key pair (raw big-endian bytes)
   uint8_t pubkey_raw[64];
-  nRF54Crypto.genKeyPair(_private_key, pubkey_raw);
+  if ( !nRF54Crypto.genKeyPair(_private_key, pubkey_raw) ) return false;
 
   // Copy raw pubkey into _pubkey (skip header byte at [0])
   _pubkey[0] = 0x04; // uncompressed point header
@@ -129,10 +142,10 @@ bool BLESecurity::begin(void)
   // Public Key = 32-byte N1 + 32-byte N2
   swap_endian(_pubkey+1,    32);
   swap_endian(_pubkey+1+32, 32);
-#endif
 
   return true;
 }
+#endif
 
 void BLESecurity::setIOCaps(bool display, bool yes_no, bool keyboard)
 {
@@ -310,6 +323,15 @@ void BLESecurity::_eventHandler(ble_evt_t* evt)
       };
 
       #if LESC_CRYPTO_AVAILABLE
+      // No key pair from begin(): try again, and refuse the pairing if there is still none
+      if ( !_lesc_keys ) _lesc_keys = _genLescKeys();
+      if ( !_lesc_keys )
+      {
+        LOG_LV1("PAIR", "No LESC key pair, refusing to pair");
+        sd_ble_gap_sec_params_reply(conn_hdl, BLE_GAP_SEC_STATUS_UNSPECIFIED, NULL, NULL);
+        break;
+      }
+
       keyset.keys_own.p_pk  = (ble_gap_lesc_p256_pk_t*) (_pubkey+1);
       keyset.keys_peer.p_pk = (ble_gap_lesc_p256_pk_t*) (_peer_pubkey+1);
       #endif
@@ -357,6 +379,7 @@ void BLESecurity::_eventHandler(ble_evt_t* evt)
       swap_endian(_peer_pubkey+1+32, 32);
 
       ble_gap_lesc_dhkey_t dhkey;
+      uint8_t dh_status = BLE_GAP_SEC_STATUS_SUCCESS;
 
       #ifdef NRF_CRYPTOCELL
       // Raw public key from peer device is uncompressed
@@ -372,9 +395,11 @@ void BLESecurity::_eventHandler(ble_evt_t* evt)
 
       peerPublickKey.end();
       #else
-      // CRACEN path: use TinyCrypt uECC for ECDH
+      // CRACEN path: use TinyCrypt uECC for ECDH. It fails when the TRNG can't supply its random
+      // initial Z, or when the result is the point at infinity (a bad peer key).
       bool ecdh_ok = nRF54Crypto.sharedSecret(_peer_pubkey+1, _private_key, dhkey.key);
       LOG_LV2("PAIR", "ECDH shared secret %s", ecdh_ok ? "ok" : "FAILED");
+      if ( !ecdh_ok ) dh_status = BLE_GAP_SEC_STATUS_DHKEY_FAILURE;
       #endif
 
       // Swap Endian before sending to air
@@ -386,8 +411,8 @@ void BLESecurity::_eventHandler(ble_evt_t* evt)
 
       // S145 v9 added a sec_status parameter before the dhkey pointer.
       // BLE_GAP_SEC_STATUS_SUCCESS accepts the derivation; non-success
-      // codes (BLE_GAP_SEC_STATUS_INVALID_PARAMS etc.) reject pairing.
-      uint32_t dh_err = sd_ble_gap_lesc_dhkey_reply(conn_hdl, BLE_GAP_SEC_STATUS_SUCCESS, &dhkey);
+      // codes (BLE_GAP_SEC_STATUS_INVALID_PARAMS etc.) reject pairing, and the dhkey is ignored.
+      uint32_t dh_err = sd_ble_gap_lesc_dhkey_reply(conn_hdl, dh_status, &dhkey);
       LOG_LV2("PAIR", "DHKey reply err %lu", dh_err);
       (void) dh_err;
     }
