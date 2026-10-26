@@ -72,7 +72,7 @@ extern "C" {
         NRF_PIN_PORT_TO_PIN_NUMBER(12U, 1), \
         NRF_PIN_PORT_TO_PIN_NUMBER(13U, 1), \
         NRF_PIN_PORT_TO_PIN_NUMBER(14U, 1)
-#elif defined(NRF54LM20A_ENGA_XXAA)
+#elif defined(NRF54LM20A_XXAA)
     #define COMP_EXTERNAL_AIN_PSELS         \
         NRF_PIN_PORT_TO_PIN_NUMBER(0U, 1),  \
         NRF_PIN_PORT_TO_PIN_NUMBER(31U, 1), \
@@ -151,7 +151,7 @@ extern "C" {
         NRF_PIN_PORT_TO_PIN_NUMBER(12U, 1), \
         NRF_PIN_PORT_TO_PIN_NUMBER(13U, 1), \
         NRF_PIN_PORT_TO_PIN_NUMBER(14U, 1),
-#elif defined(NRF54LM20A_ENGA_XXAA)
+#elif defined(NRF54LM20A_XXAA)
     #define COMP_EXTERNAL_REF_PSELS         \
         NRF_PIN_PORT_TO_PIN_NUMBER(0U, 1),  \
         NRF_PIN_PORT_TO_PIN_NUMBER(31U, 1), \
@@ -230,7 +230,7 @@ extern "C" {
         NRF_PIN_PORT_TO_PIN_NUMBER(12U, 1), \
         NRF_PIN_PORT_TO_PIN_NUMBER(13U, 1), \
         NRF_PIN_PORT_TO_PIN_NUMBER(14U, 1),
-#elif defined(NRF54LM20A_ENGA_XXAA)
+#elif defined(NRF54LM20A_XXAA)
     #define LPCOMP_EXTERNAL_AIN_PSELS       \
         NRF_PIN_PORT_TO_PIN_NUMBER(0U, 1),  \
         NRF_PIN_PORT_TO_PIN_NUMBER(31U, 1), \
@@ -305,7 +305,7 @@ extern "C" {
         NRF_PIN_PORT_TO_PIN_NUMBER(12U, 1), \
         NRF_PIN_PORT_TO_PIN_NUMBER(13U, 1), \
         NRF_PIN_PORT_TO_PIN_NUMBER(14U, 1),
-#elif defined(NRF54LM20A_ENGA_XXAA)
+#elif defined(NRF54LM20A_XXAA)
     #define LPCOMP_EXTERNAL_REF_PSELS       \
         NRF_PIN_PORT_TO_PIN_NUMBER(0U, 1),  \
         NRF_PIN_PORT_TO_PIN_NUMBER(31U, 1), \
@@ -380,7 +380,7 @@ extern "C" {
         NRF_PIN_PORT_TO_PIN_NUMBER(12U, 1), \
         NRF_PIN_PORT_TO_PIN_NUMBER(13U, 1), \
         NRF_PIN_PORT_TO_PIN_NUMBER(14U, 1),
-#elif defined(NRF54LM20A_ENGA_XXAA)
+#elif defined(NRF54LM20A_XXAA)
     #define SAADC_EXTERNAL_AIN_PSELS        \
         NRF_PIN_PORT_TO_PIN_NUMBER(0U, 1),  \
         NRF_PIN_PORT_TO_PIN_NUMBER(31U, 1), \
@@ -454,7 +454,7 @@ extern "C" {
         NRF_SAADC_INPUT_AVDD,                                            \
         NRFX_COND_CODE_1(NRFX_ARG_HAS_PARENTHESIS(NRF_SAADC_INPUT_DVDD), \
             (NRF_SAADC_INPUT_DVDD,), (NRFX_SAADC_INPUT_NOT_PRESENT,))
-#elif defined(NRF54LM20A_ENGA_XXAA)
+#elif defined(NRF54LM20A_XXAA)
     #define SAADC_INTERNAL_AIN_PSELS                                     \
         NRF_SAADC_INPUT_VDD,                                             \
         NRFX_SAADC_INPUT_NOT_PRESENT,                                    \
@@ -608,7 +608,7 @@ extern "C" {
 #define RAM_UNIFORM_BLOCKS             1
 #define RAM_UNIFORM_SECTIONS_PER_BLOCK 8
 #define RAM_UNIFORM_SECTIONS_TOTAL     8
-#elif defined(NRF54LM20A_ENGA_XXAA)
+#elif defined(NRF54LM20A_XXAA)
 #define RAM_SECTION_UNIT_SIZE          (32UL * 1024UL)
 #define RAM_UNIFORM_BLOCKS             1
 #define RAM_UNIFORM_SECTIONS_PER_BLOCK 16
@@ -718,7 +718,7 @@ extern "C" {
     #define NRFX_PRS_BOX_4_ADDR     NRF_UARTE30
     // COMP, LPCOMP
     #define NRFX_PRS_BOX_5_ADDR     NRF_COMP
-#elif defined(NRF54LM20A_ENGA_XXAA)
+#elif defined(NRF54LM20A_XXAA)
     // SPIM00, SPIS00, UARTE00
     #define NRFX_PRS_BOX_0_ADDR     NRF_UARTE00
     // SPIM20, SPIS20, TWIM20, TWIS20, UARTE20

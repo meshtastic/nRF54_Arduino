@@ -1,6 +1,6 @@
 /*
 
-Copyright (c) 2010 - 2025, Nordic Semiconductor ASA All rights reserved.
+Copyright (c) 2010 - 2026, Nordic Semiconductor ASA All rights reserved.
 
 SPDX-License-Identifier: BSD-3-Clause
 
@@ -37,9 +37,12 @@ POSSIBILITY OF SUCH DAMAGE.
 
 /* MDK version */
 #define MDK_MAJOR_VERSION   8 
-#define MDK_MINOR_VERSION   73 
-#define MDK_MICRO_VERSION   2 
+#define MDK_MINOR_VERSION   75 
+#define MDK_MICRO_VERSION   1 
 
+#ifdef __ZEPHYR__
+#include <mdk_config.h>
+#endif
    
 /* Define coprocessor domains */
 #if defined (NRF5340_XXAA_APPLICATION) || defined (NRF5340_XXAA_NETWORK)
@@ -124,7 +127,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #endif
 
 /* Define NRF54L_SERIES for common use in nRF54L series devices */
-#if defined (NRF54L05_XXAA) || defined (NRF54LV10A_ENGA_XXAA) || defined (NRF54L10_XXAA) || defined (NRF54L15_XXAA) ||  defined (NRF54LM20A_ENGA_XXAA) || defined (NRF54LS05B_ENGA_XXAA)
+#if defined (NRF54L05_XXAA) || defined (NRF54LV10A_XXAA) || defined (NRF54L10_XXAA) || defined (NRF54L15_XXAA) ||  defined (NRF54LM20A_XXAA) ||  defined (NRF54LM20B_XXAA) || defined (NRF54LS05B_XXAA) || defined (NRF54LC10A_XXAA) || defined (NRF54LS05A_XXAA)
     #ifndef NRF54L_SERIES
         #define NRF54L_SERIES
     #endif
@@ -151,7 +154,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #endif
 
 /* Define NRF92_SERIES for common use in nRF92 series devices. */
-#if defined(NRF9230_ENGB_XXAA)
+#if defined(NRF9230_ENGB_XXAA) || defined (NRF9220_XXAA)
     #ifndef NRF92_SERIES
         #define NRF92_SERIES
     #endif
@@ -234,10 +237,10 @@ POSSIBILITY OF SUCH DAMAGE.
     #include "nrf54l05_interim.h"
     #include "nrf54l05_name_change.h"
 
-#elif defined (NRF54LV10A_ENGA_XXAA)
-    #include "nrf54lv10a_enga.h"
-    #include "nrf54lv10a_enga_interim.h"
-    #include "nrf54lv10a_enga_name_change.h"
+#elif defined (NRF54LV10A_XXAA)
+    #include "nrf54lv10a.h"
+    #include "nrf54lv10a_interim.h"
+    #include "nrf54lv10a_name_change.h"
 
 #elif defined (NRF54L10_XXAA)
     #include "nrf54l10.h"
@@ -249,15 +252,20 @@ POSSIBILITY OF SUCH DAMAGE.
     #include "nrf54l15_interim.h"
     #include "nrf54l15_name_change.h"
 
-#elif defined (NRF54LM20A_ENGA_XXAA)
-    #include "nrf54lm20a_enga.h"
-    #include "nrf54lm20a_enga_interim.h"
-    #include "nrf54lm20a_enga_name_change.h"
+#elif defined (NRF54LM20A_XXAA)
+    #include "nrf54lm20a.h"
+    #include "nrf54lm20a_interim.h"
+    #include "nrf54lm20a_name_change.h"
 
-#elif defined (NRF54LS05B_ENGA_XXAA)
-    #include "nrf54ls05b_enga.h"
-    #include "nrf54ls05b_enga_interim.h"
-    #include "nrf54ls05b_enga_name_change.h"
+#elif defined (NRF54LM20B_XXAA)
+    #include "nrf54lm20b.h"
+    #include "nrf54lm20b_interim.h"
+    #include "nrf54lm20b_name_change.h"
+
+#elif defined (NRF54LS05B_XXAA)
+    #include "nrf54ls05b.h"
+    #include "nrf54ls05b_interim.h"
+    #include "nrf54ls05b_name_change.h"
 
 #elif defined (NRF7120_ENGA_XXAA)
     #include "nrf7120_enga.h"
@@ -291,6 +299,22 @@ POSSIBILITY OF SUCH DAMAGE.
     #include "nrf9230_engb_interim.h"
     #include "nrf9230_engb_name_change.h"
 
+#elif defined (NRF54LC10A_XXAA)
+    #include "nrf54lc10a.h"
+    #include "nrf54lc10a_interim.h"
+    #include "nrf54lc10a_name_change.h"
+
+#elif defined (NRF54LS05A_XXAA)
+    #include "nrf54ls05a.h"
+    #include "nrf54ls05a_interim.h"
+    #include "nrf54ls05a_name_change.h"
+
+#elif defined (NRF9220_XXAA)
+    #include "nrf9220.h"
+    #include "nrf9220_interim.h"
+    #include "nrf9220_name_change.h"
+
+/* Ending device selection for device includes. */
 #else
     #error "Device must be defined. See nrf.h."
 #endif /* NRF51, NRF52805_XXAA, NRF52810_XXAA, NRF52811_XXAA, NRF52820_XXAA, NRF52832_XXAA, NRF52832_XXAB, NRF52833_XXAA, NRF52840_XXAA, NRF5340_XXAA_APPLICATION, NRF5340_XXAA_NETWORK, NRF9160_XXAA */

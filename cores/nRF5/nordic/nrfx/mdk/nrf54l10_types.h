@@ -1,6 +1,6 @@
 /*
 
-Copyright (c) 2010 - 2025, Nordic Semiconductor ASA All rights reserved.
+Copyright (c) 2010 - 2026, Nordic Semiconductor ASA All rights reserved.
 
 SPDX-License-Identifier: BSD-3-Clause
 
@@ -12223,8 +12223,8 @@ typedef struct {
   #define GPIO_PIN_CNF_PULL_Min (0x0UL)              /*!< Min enumerator value of PULL field.                                  */
   #define GPIO_PIN_CNF_PULL_Max (0x3UL)              /*!< Max enumerator value of PULL field.                                  */
   #define GPIO_PIN_CNF_PULL_Disabled (0x0UL)         /*!< No pull                                                              */
-  #define GPIO_PIN_CNF_PULL_Pulldown (0x1UL)         /*!< Pull down on pin                                                     */
-  #define GPIO_PIN_CNF_PULL_Pullup (0x3UL)           /*!< Pull up on pin                                                       */
+  #define GPIO_PIN_CNF_PULL_Pulldown (0x1UL)         /*!< Pull-down on pin                                                     */
+  #define GPIO_PIN_CNF_PULL_Pullup (0x3UL)           /*!< Pull-up on pin                                                       */
 
 /* DRIVE0 @Bits 8..9 : Drive configuration for '0' */
   #define GPIO_PIN_CNF_DRIVE0_Pos (8UL)              /*!< Position of DRIVE0 field.                                            */
@@ -12287,7 +12287,7 @@ typedef struct {
 /* GPIOHSPADCTRL_BIAS: Bias control */
   #define GPIOHSPADCTRL_BIAS_ResetValue (0x00000000UL) /*!< Reset value of BIAS register.                                      */
 
-/* HSBIAS @Bits 0..1 : Slew setting for high-speed pad (higher value is faster) */
+/* HSBIAS @Bits 0..1 : Slew setting for high-speed pad (Use highest/fastest value) */
   #define GPIOHSPADCTRL_BIAS_HSBIAS_Pos (0UL)        /*!< Position of HSBIAS field.                                            */
   #define GPIOHSPADCTRL_BIAS_HSBIAS_Msk (0x3UL << GPIOHSPADCTRL_BIAS_HSBIAS_Pos) /*!< Bit mask of HSBIAS field.                */
   #define GPIOHSPADCTRL_BIAS_HSBIAS_Min (0x0UL)      /*!< Min value of HSBIAS field.                                           */
@@ -24054,29 +24054,21 @@ typedef struct {
   * @brief AUXDATA [RADIO_AUXDATA] (unspecified)
   */
 typedef struct {
-  __IOM uint32_t  CNF[2];                            /*!< (@ 0x00000000) AUXDATA configuration                                 */
-} NRF_RADIO_AUXDATA_Type;                            /*!< Size = 8 (0x008)                                                     */
+  __IOM uint32_t  CNF[1];                            /*!< (@ 0x00000000) AUXDATA configuration                                 */
+} NRF_RADIO_AUXDATA_Type;                            /*!< Size = 4 (0x004)                                                     */
 
 /* RADIO_AUXDATA_CNF: AUXDATA configuration */
-  #define RADIO_AUXDATA_CNF_MaxCount (2UL)           /*!< Max size of CNF[2] array.                                            */
-  #define RADIO_AUXDATA_CNF_MaxIndex (1UL)           /*!< Max index of CNF[2] array.                                           */
-  #define RADIO_AUXDATA_CNF_MinIndex (0UL)           /*!< Min index of CNF[2] array.                                           */
-  #define RADIO_AUXDATA_CNF_ResetValue (0x00000000UL) /*!< Reset value of CNF[2] register.                                     */
+  #define RADIO_AUXDATA_CNF_MaxCount (1UL)           /*!< Max size of CNF[1] array.                                            */
+  #define RADIO_AUXDATA_CNF_MaxIndex (0UL)           /*!< Max index of CNF[1] array.                                           */
+  #define RADIO_AUXDATA_CNF_MinIndex (0UL)           /*!< Min index of CNF[1] array.                                           */
+  #define RADIO_AUXDATA_CNF_ResetValue (0x00000000UL) /*!< Reset value of CNF[1] register.                                     */
 
-/* ACQMODE @Bits 0..4 : Acquisition mode (data from RADIO written to memory) */
+/* ACQMODE @Bits 0..4 : Acquisition mode */
   #define RADIO_AUXDATA_CNF_ACQMODE_Pos (0UL)        /*!< Position of ACQMODE field.                                           */
   #define RADIO_AUXDATA_CNF_ACQMODE_Msk (0x1FUL << RADIO_AUXDATA_CNF_ACQMODE_Pos) /*!< Bit mask of ACQMODE field.              */
   #define RADIO_AUXDATA_CNF_ACQMODE_Min (0x07UL)     /*!< Min enumerator value of ACQMODE field.                               */
   #define RADIO_AUXDATA_CNF_ACQMODE_Max (0x07UL)     /*!< Max enumerator value of ACQMODE field.                               */
   #define RADIO_AUXDATA_CNF_ACQMODE_Rtt (0x07UL)     /*!< Baseband Channel Sounding RTT Data                                   */
-
-/* DIR @Bit 31 : Data acquisition or injection */
-  #define RADIO_AUXDATA_CNF_DIR_Pos (31UL)           /*!< Position of DIR field.                                               */
-  #define RADIO_AUXDATA_CNF_DIR_Msk (0x1UL << RADIO_AUXDATA_CNF_DIR_Pos) /*!< Bit mask of DIR field.                           */
-  #define RADIO_AUXDATA_CNF_DIR_Min (0x0UL)          /*!< Min enumerator value of DIR field.                                   */
-  #define RADIO_AUXDATA_CNF_DIR_Max (0x1UL)          /*!< Max enumerator value of DIR field.                                   */
-  #define RADIO_AUXDATA_CNF_DIR_Acq (0x0UL)          /*!< Peripheral to memory                                                 */
-  #define RADIO_AUXDATA_CNF_DIR_Inj (0x1UL)          /*!< Memory to peripheral                                                 */
 
 
 
@@ -24091,9 +24083,9 @@ typedef struct {
   __IM  uint32_t  AMOUNT;                            /*!< (@ 0x0000000C) Number of 32-bit words transferred in the last
                                                                          transaction*/
 } NRF_RADIO_AUXDATADMA_Type;                         /*!< Size = 16 (0x010)                                                    */
-  #define RADIO_AUXDATADMA_MaxCount (2UL)            /*!< Size of AUXDATADMA[2] array.                                         */
-  #define RADIO_AUXDATADMA_MaxIndex (1UL)            /*!< Max index of AUXDATADMA[2] array.                                    */
-  #define RADIO_AUXDATADMA_MinIndex (0UL)            /*!< Min index of AUXDATADMA[2] array.                                    */
+  #define RADIO_AUXDATADMA_MaxCount (1UL)            /*!< Size of AUXDATADMA[1] array.                                         */
+  #define RADIO_AUXDATADMA_MaxIndex (0UL)            /*!< Max index of AUXDATADMA[1] array.                                    */
+  #define RADIO_AUXDATADMA_MinIndex (0UL)            /*!< Min index of AUXDATADMA[1] array.                                    */
 
 /* RADIO_AUXDATADMA_ENABLE: Enable or disable data acquisition */
   #define RADIO_AUXDATADMA_ENABLE_ResetValue (0x00000000UL) /*!< Reset value of ENABLE register.                               */
@@ -24443,7 +24435,7 @@ typedef struct {
 /* RADIO_RTT_CONFIG: RTT Config. */
   #define RADIO_RTT_CONFIG_ResetValue (0x00000000UL) /*!< Reset value of CONFIG register.                                      */
 
-/* EN @Bit 0 : Enable RTT Functionality. Only valid for BLE 1MBPS and 2MBPS mode */
+/* EN @Bit 0 : Enable RTT functionality. Only valid for BLE 1MBPS and 2MBPS mode */
   #define RADIO_RTT_CONFIG_EN_Pos (0UL)              /*!< Position of EN field.                                                */
   #define RADIO_RTT_CONFIG_EN_Msk (0x1UL << RADIO_RTT_CONFIG_EN_Pos) /*!< Bit mask of EN field.                                */
   #define RADIO_RTT_CONFIG_EN_Min (0x0UL)            /*!< Min enumerator value of EN field.                                    */
@@ -24473,7 +24465,7 @@ typedef struct {
   #define RADIO_RTT_CONFIG_NUMSEGMENTS_Msk (0xFUL << RADIO_RTT_CONFIG_NUMSEGMENTS_Pos) /*!< Bit mask of NUMSEGMENTS field.     */
 
 /* EFSDELAY @Bits 8..16 : Early Frame Sync Delay, i.e., number of cycles to wait for access address to anchor correctly. For
-                          2MBPSBLE mode, the EFSDELAY value is 64 (2us) and for 1MBPSBLE mode, it can be 256 (8us). */
+                          Ble_2Mbit, the EFSDELAY value is 64 (2us) and for Ble_1Mbit, it can be 256 (8us). */
 
   #define RADIO_RTT_CONFIG_EFSDELAY_Pos (8UL)        /*!< Position of EFSDELAY field.                                          */
   #define RADIO_RTT_CONFIG_EFSDELAY_Msk (0x1FFUL << RADIO_RTT_CONFIG_EFSDELAY_Pos) /*!< Bit mask of EFSDELAY field.            */
@@ -24657,44 +24649,45 @@ typedef struct {
     __IOM uint32_t DATAWHITE;                        /*!< (@ 0x00000540) Data whitening configuration                          */
     __IM uint32_t RESERVED25;
     __IOM NRF_RADIO_AUXDATA_Type AUXDATA;            /*!< (@ 0x00000548) (unspecified)                                         */
-    __IOM NRF_RADIO_AUXDATADMA_Type AUXDATADMA[2];   /*!< (@ 0x00000550) (unspecified)                                         */
-    __IM uint32_t RESERVED26[101];
+    __IM uint32_t RESERVED26;
+    __IOM NRF_RADIO_AUXDATADMA_Type AUXDATADMA[1];   /*!< (@ 0x00000550) (unspecified)                                         */
+    __IM uint32_t RESERVED27[105];
     __IOM uint32_t TIMING;                           /*!< (@ 0x00000704) Timing                                                */
     __IOM uint32_t FREQUENCY;                        /*!< (@ 0x00000708) Frequency                                             */
-    __IM uint32_t RESERVED27;
+    __IM uint32_t RESERVED28;
     __IOM uint32_t TXPOWER;                          /*!< (@ 0x00000710) Output power                                          */
     __IOM uint32_t TIFS;                             /*!< (@ 0x00000714) Interframe spacing in us                              */
     __IM uint32_t RSSISAMPLE;                        /*!< (@ 0x00000718) RSSI sample                                           */
-    __IM uint32_t RESERVED28[45];
+    __IM uint32_t RESERVED29[45];
     __IOM NRF_RADIO_RXGAIN_Type RXGAIN;              /*!< (@ 0x000007D0) (unspecified)                                         */
-    __IM uint32_t RESERVED29[11];
+    __IM uint32_t RESERVED30[11];
     __IOM uint32_t FREQFINETUNE;                     /*!< (@ 0x00000804) Fine tuning of the RF frequency                       */
-    __IM uint32_t RESERVED30[64];
+    __IM uint32_t RESERVED31[64];
     __IOM uint32_t FECONFIG;                         /*!< (@ 0x00000908) Config register                                       */
-    __IM uint32_t RESERVED31[125];
+    __IM uint32_t RESERVED32[125];
     __IM uint32_t CFO_STAT;                          /*!< (@ 0x00000B00) Carrier freq. offset estimate                         */
-    __IM uint32_t RESERVED32[15];
+    __IM uint32_t RESERVED33[15];
     __IOM uint32_t DBCCORR;                          /*!< (@ 0x00000B40) Correlator thresholds                                 */
-    __IM uint32_t RESERVED33[111];
+    __IM uint32_t RESERVED34[111];
     __IOM uint32_t DFEMODE;                          /*!< (@ 0x00000D00) Whether to use Angle-of-Arrival (AOA) or
                                                                          Angle-of-Departure (AOD)*/
     __IM uint32_t DFESTATUS;                         /*!< (@ 0x00000D04) DFE status information                                */
-    __IM uint32_t RESERVED34[2];
+    __IM uint32_t RESERVED35[2];
     __IOM uint32_t DFECTRL1;                         /*!< (@ 0x00000D10) Various configuration for Direction finding           */
     __IOM uint32_t DFECTRL2;                         /*!< (@ 0x00000D14) Start offset for Direction finding                    */
-    __IM uint32_t RESERVED35[4];
+    __IM uint32_t RESERVED36[4];
     __IOM uint32_t SWITCHPATTERN;                    /*!< (@ 0x00000D28) GPIO patterns to be used for each antenna             */
     __OM uint32_t CLEARPATTERN;                      /*!< (@ 0x00000D2C) Clear the GPIO pattern array for antenna control      */
     __IOM NRF_RADIO_PSEL_Type PSEL;                  /*!< (@ 0x00000D30) (unspecified)                                         */
     __IOM NRF_RADIO_DFEPACKET_Type DFEPACKET;        /*!< (@ 0x00000D50) DFE packet EasyDMA channel                            */
-    __IM uint32_t RESERVED36[43];
+    __IM uint32_t RESERVED37[43];
     __IM uint32_t CRCSTATUS;                         /*!< (@ 0x00000E0C) CRC status                                            */
     __IM uint32_t RXMATCH;                           /*!< (@ 0x00000E10) Received address                                      */
     __IM uint32_t RXCRC;                             /*!< (@ 0x00000E14) CRC field of previously received packet               */
     __IM uint32_t DAI;                               /*!< (@ 0x00000E18) Device address match index                            */
     __IM uint32_t PDUSTAT;                           /*!< (@ 0x00000E1C) Payload status                                        */
     __IOM uint32_t PCNF0;                            /*!< (@ 0x00000E20) Packet configuration register 0                       */
-    __IM uint32_t RESERVED37;
+    __IM uint32_t RESERVED38;
     __IOM uint32_t PCNF1;                            /*!< (@ 0x00000E28) Packet configuration register 1                       */
     __IOM uint32_t BASE0;                            /*!< (@ 0x00000E2C) Base address 0                                        */
     __IOM uint32_t BASE1;                            /*!< (@ 0x00000E30) Base address 1                                        */
@@ -24709,18 +24702,18 @@ typedef struct {
     __IOM uint32_t DAP[8];                           /*!< (@ 0x00000E70) Device address prefix n                               */
     __IOM uint32_t DACNF;                            /*!< (@ 0x00000E90) Device address match configuration                    */
     __IOM uint32_t BCC;                              /*!< (@ 0x00000E94) Bit counter compare                                   */
-    __IM uint32_t RESERVED38[3];
-    __IM uint32_t CTESTATUS;                         /*!< (@ 0x00000EA4) CTEInfo parsed from received packet                   */
     __IM uint32_t RESERVED39[3];
+    __IM uint32_t CTESTATUS;                         /*!< (@ 0x00000EA4) CTEInfo parsed from received packet                   */
+    __IM uint32_t RESERVED40[3];
     __IOM uint32_t MHRMATCHCONF;                     /*!< (@ 0x00000EB4) Search pattern configuration                          */
     __IOM uint32_t MHRMATCHMASK;                     /*!< (@ 0x00000EB8) Pattern mask                                          */
     __IOM uint32_t SFD;                              /*!< (@ 0x00000EBC) IEEE 802.15.4 start of frame delimiter                */
     __IOM uint32_t CTEINLINECONF;                    /*!< (@ 0x00000EC0) Configuration for CTE inline mode                     */
-    __IM uint32_t RESERVED40[3];
+    __IM uint32_t RESERVED41[3];
     __IOM uint32_t PACKETPTR;                        /*!< (@ 0x00000ED0) Packet pointer                                        */
-    __IM uint32_t RESERVED41[75];
+    __IM uint32_t RESERVED42[75];
     __IOM NRF_RADIO_CSTONES_Type CSTONES;            /*!< (@ 0x00001000) (unspecified)                                         */
-    __IM uint32_t RESERVED42[2];
+    __IM uint32_t RESERVED43[2];
     __IOM NRF_RADIO_RTT_Type RTT;                    /*!< (@ 0x00001050) (unspecified)                                         */
   } NRF_RADIO_Type;                                  /*!< Size = 4196 (0x1064)                                                 */
 
@@ -26129,6 +26122,14 @@ typedef struct {
   #define RADIO_SHORTS_ADDRESS_BCSTART_Disabled (0x0UL) /*!< Disable shortcut                                                  */
   #define RADIO_SHORTS_ADDRESS_BCSTART_Enabled (0x1UL) /*!< Enable shortcut                                                    */
 
+/* PHYEND_PLLEN @Bit 7 : Shortcut between event PHYEND and task PLLEN */
+  #define RADIO_SHORTS_PHYEND_PLLEN_Pos (7UL)        /*!< Position of PHYEND_PLLEN field.                                      */
+  #define RADIO_SHORTS_PHYEND_PLLEN_Msk (0x1UL << RADIO_SHORTS_PHYEND_PLLEN_Pos) /*!< Bit mask of PHYEND_PLLEN field.          */
+  #define RADIO_SHORTS_PHYEND_PLLEN_Min (0x0UL)      /*!< Min enumerator value of PHYEND_PLLEN field.                          */
+  #define RADIO_SHORTS_PHYEND_PLLEN_Max (0x1UL)      /*!< Max enumerator value of PHYEND_PLLEN field.                          */
+  #define RADIO_SHORTS_PHYEND_PLLEN_Disabled (0x0UL) /*!< Disable shortcut                                                     */
+  #define RADIO_SHORTS_PHYEND_PLLEN_Enabled (0x1UL)  /*!< Enable shortcut                                                      */
+
 /* RXREADY_CCASTART @Bit 10 : Shortcut between event RXREADY and task CCASTART */
   #define RADIO_SHORTS_RXREADY_CCASTART_Pos (10UL)   /*!< Position of RXREADY_CCASTART field.                                  */
   #define RADIO_SHORTS_RXREADY_CCASTART_Msk (0x1UL << RADIO_SHORTS_RXREADY_CCASTART_Pos) /*!< Bit mask of RXREADY_CCASTART
@@ -26218,6 +26219,22 @@ typedef struct {
   #define RADIO_SHORTS_PHYEND_START_Max (0x1UL)      /*!< Max enumerator value of PHYEND_START field.                          */
   #define RADIO_SHORTS_PHYEND_START_Disabled (0x0UL) /*!< Disable shortcut                                                     */
   #define RADIO_SHORTS_PHYEND_START_Enabled (0x1UL)  /*!< Enable shortcut                                                      */
+
+/* PLLREADY_TXEN @Bit 27 : Shortcut between event PLLREADY and task TXEN */
+  #define RADIO_SHORTS_PLLREADY_TXEN_Pos (27UL)      /*!< Position of PLLREADY_TXEN field.                                     */
+  #define RADIO_SHORTS_PLLREADY_TXEN_Msk (0x1UL << RADIO_SHORTS_PLLREADY_TXEN_Pos) /*!< Bit mask of PLLREADY_TXEN field.       */
+  #define RADIO_SHORTS_PLLREADY_TXEN_Min (0x0UL)     /*!< Min enumerator value of PLLREADY_TXEN field.                         */
+  #define RADIO_SHORTS_PLLREADY_TXEN_Max (0x1UL)     /*!< Max enumerator value of PLLREADY_TXEN field.                         */
+  #define RADIO_SHORTS_PLLREADY_TXEN_Disabled (0x0UL) /*!< Disable shortcut                                                    */
+  #define RADIO_SHORTS_PLLREADY_TXEN_Enabled (0x1UL) /*!< Enable shortcut                                                      */
+
+/* PLLREADY_RXEN @Bit 28 : Shortcut between event PLLREADY and task RXEN */
+  #define RADIO_SHORTS_PLLREADY_RXEN_Pos (28UL)      /*!< Position of PLLREADY_RXEN field.                                     */
+  #define RADIO_SHORTS_PLLREADY_RXEN_Msk (0x1UL << RADIO_SHORTS_PLLREADY_RXEN_Pos) /*!< Bit mask of PLLREADY_RXEN field.       */
+  #define RADIO_SHORTS_PLLREADY_RXEN_Min (0x0UL)     /*!< Min enumerator value of PLLREADY_RXEN field.                         */
+  #define RADIO_SHORTS_PLLREADY_RXEN_Max (0x1UL)     /*!< Max enumerator value of PLLREADY_RXEN field.                         */
+  #define RADIO_SHORTS_PLLREADY_RXEN_Disabled (0x0UL) /*!< Disable shortcut                                                    */
+  #define RADIO_SHORTS_PLLREADY_RXEN_Enabled (0x1UL) /*!< Enable shortcut                                                      */
 
 
 /* RADIO_INTENSET00: Enable interrupt */
@@ -27260,8 +27277,8 @@ typedef struct {
   #define RADIO_PHYENDTXDELAY_RATE2M_Pos (4UL)       /*!< Position of RATE2M field.                                            */
   #define RADIO_PHYENDTXDELAY_RATE2M_Msk (0x7UL << RADIO_PHYENDTXDELAY_RATE2M_Pos) /*!< Bit mask of RATE2M field.              */
 
-/* RATE1M @Bits 8..10 : For modes with 1 Mbps on-air bit rate, unit is 1/2 bit period (Nrf_1Mbit, Ble_1Mbit, Ble_LR125Kbit, and
-                        Ble_LR500Kbit modes) */
+/* RATE1M @Bits 8..10 : For modes with 1 Mbps on-air bit rate, unit is 1/2 bit period (Nrf_1Mbit and Ble_1Mbit modes) Also used
+                        for Coded phy (Ble_LR125Kbit and Ble_LR500Kbit modes) */
 
   #define RADIO_PHYENDTXDELAY_RATE1M_Pos (8UL)       /*!< Position of RATE1M field.                                            */
   #define RADIO_PHYENDTXDELAY_RATE1M_Msk (0x7UL << RADIO_PHYENDTXDELAY_RATE1M_Pos) /*!< Bit mask of RATE1M field.              */
@@ -27284,6 +27301,8 @@ typedef struct {
   #define RADIO_STATE_STATE_RxIdle (0x2UL)           /*!< RADIO is in the RXIDLE state                                         */
   #define RADIO_STATE_STATE_Rx (0x3UL)               /*!< RADIO is in the RX state                                             */
   #define RADIO_STATE_STATE_RxDisable (0x4UL)        /*!< RADIO is in the RXDISABLE state                                      */
+  #define RADIO_STATE_STATE_Settle (0x5UL)           /*!< RADIO is in the SETTLE state                                         */
+  #define RADIO_STATE_STATE_Pll (0x6UL)              /*!< RADIO is in the PLL state                                            */
   #define RADIO_STATE_STATE_TxRu (0x9UL)             /*!< RADIO is in the TXRU state                                           */
   #define RADIO_STATE_STATE_TxIdle (0xAUL)           /*!< RADIO is in the TXIDLE state                                         */
   #define RADIO_STATE_STATE_Tx (0xBUL)               /*!< RADIO is in the TX state                                             */
@@ -29287,9 +29306,10 @@ typedef struct {
   #define SAADC_CH_PSELN_CONNECT_Pos (30UL)          /*!< Position of CONNECT field.                                           */
   #define SAADC_CH_PSELN_CONNECT_Msk (0x3UL << SAADC_CH_PSELN_CONNECT_Pos) /*!< Bit mask of CONNECT field.                     */
   #define SAADC_CH_PSELN_CONNECT_Min (0x0UL)         /*!< Min enumerator value of CONNECT field.                               */
-  #define SAADC_CH_PSELN_CONNECT_Max (0x1UL)         /*!< Max enumerator value of CONNECT field.                               */
+  #define SAADC_CH_PSELN_CONNECT_Max (0x2UL)         /*!< Max enumerator value of CONNECT field.                               */
   #define SAADC_CH_PSELN_CONNECT_NC (0x0UL)          /*!< Not connected                                                        */
   #define SAADC_CH_PSELN_CONNECT_AnalogInput (0x1UL) /*!< Select analog input                                                  */
+  #define SAADC_CH_PSELN_CONNECT_Internal (0x2UL)    /*!< Selects internal inputs.                                             */
 
 
 /* SAADC_CH_CONFIG: Input configuration for CH[n] */
@@ -32733,7 +32753,9 @@ typedef struct {
   __IM  uint32_t  AMOUNT;                            /*!< (@ 0x0000000C) Number of bytes transferred in the last transaction,
                                                                          updated after the END event. Also updated after each
                                                                          MATCH event.*/
-  __IM  uint32_t  RESERVED1[3];
+  __IM  uint32_t  RESERVED1;
+  __IOM uint32_t  LIST;                              /*!< (@ 0x00000014) EasyDMA list type                                     */
+  __IM  uint32_t  RESERVED2;
   __IOM uint32_t  TERMINATEONBUSERROR;               /*!< (@ 0x0000001C) Terminate the transaction if a BUSERROR event is
                                                                          detected.*/
   __IM  uint32_t  BUSERRORADDRESS;                   /*!< (@ 0x00000020) Address of transaction that generated the last BUSERROR
@@ -32772,6 +32794,18 @@ typedef struct {
   #define SPIS_DMA_RX_AMOUNT_AMOUNT_Max (0xFFFFUL)   /*!< Max size of AMOUNT field.                                            */
 
 
+/* SPIS_DMA_RX_LIST: EasyDMA list type */
+  #define SPIS_DMA_RX_LIST_ResetValue (0x00000000UL) /*!< Reset value of LIST register.                                        */
+
+/* TYPE @Bits 0..2 : List type */
+  #define SPIS_DMA_RX_LIST_TYPE_Pos (0UL)            /*!< Position of TYPE field.                                              */
+  #define SPIS_DMA_RX_LIST_TYPE_Msk (0x7UL << SPIS_DMA_RX_LIST_TYPE_Pos) /*!< Bit mask of TYPE field.                          */
+  #define SPIS_DMA_RX_LIST_TYPE_Min (0x0UL)          /*!< Min enumerator value of TYPE field.                                  */
+  #define SPIS_DMA_RX_LIST_TYPE_Max (0x1UL)          /*!< Max enumerator value of TYPE field.                                  */
+  #define SPIS_DMA_RX_LIST_TYPE_Disabled (0x0UL)     /*!< Disable EasyDMA list                                                 */
+  #define SPIS_DMA_RX_LIST_TYPE_ArrayList (0x1UL)    /*!< Use array list                                                       */
+
+
 /* SPIS_DMA_RX_TERMINATEONBUSERROR: Terminate the transaction if a BUSERROR event is detected. */
   #define SPIS_DMA_RX_TERMINATEONBUSERROR_ResetValue (0x00000000UL) /*!< Reset value of TERMINATEONBUSERROR register.          */
 
@@ -32806,7 +32840,9 @@ typedef struct {
   __IM  uint32_t  AMOUNT;                            /*!< (@ 0x0000000C) Number of bytes transferred in the last transaction,
                                                                          updated after the END event. Also updated after each
                                                                          MATCH event.*/
-  __IM  uint32_t  RESERVED1[3];
+  __IM  uint32_t  RESERVED1;
+  __IOM uint32_t  LIST;                              /*!< (@ 0x00000014) EasyDMA list type                                     */
+  __IM  uint32_t  RESERVED2;
   __IOM uint32_t  TERMINATEONBUSERROR;               /*!< (@ 0x0000001C) Terminate the transaction if a BUSERROR event is
                                                                          detected.*/
   __IM  uint32_t  BUSERRORADDRESS;                   /*!< (@ 0x00000020) Address of transaction that generated the last BUSERROR
@@ -32841,6 +32877,18 @@ typedef struct {
   #define SPIS_DMA_TX_AMOUNT_AMOUNT_Msk (0xFFFFUL << SPIS_DMA_TX_AMOUNT_AMOUNT_Pos) /*!< Bit mask of AMOUNT field.             */
   #define SPIS_DMA_TX_AMOUNT_AMOUNT_Min (0x0001UL)   /*!< Min value of AMOUNT field.                                           */
   #define SPIS_DMA_TX_AMOUNT_AMOUNT_Max (0xFFFFUL)   /*!< Max size of AMOUNT field.                                            */
+
+
+/* SPIS_DMA_TX_LIST: EasyDMA list type */
+  #define SPIS_DMA_TX_LIST_ResetValue (0x00000000UL) /*!< Reset value of LIST register.                                        */
+
+/* TYPE @Bits 0..2 : List type */
+  #define SPIS_DMA_TX_LIST_TYPE_Pos (0UL)            /*!< Position of TYPE field.                                              */
+  #define SPIS_DMA_TX_LIST_TYPE_Msk (0x7UL << SPIS_DMA_TX_LIST_TYPE_Pos) /*!< Bit mask of TYPE field.                          */
+  #define SPIS_DMA_TX_LIST_TYPE_Min (0x0UL)          /*!< Min enumerator value of TYPE field.                                  */
+  #define SPIS_DMA_TX_LIST_TYPE_Max (0x1UL)          /*!< Max enumerator value of TYPE field.                                  */
+  #define SPIS_DMA_TX_LIST_TYPE_Disabled (0x0UL)     /*!< Disable EasyDMA list                                                 */
+  #define SPIS_DMA_TX_LIST_TYPE_ArrayList (0x1UL)    /*!< Use array list                                                       */
 
 
 /* SPIS_DMA_TX_TERMINATEONBUSERROR: Terminate the transaction if a BUSERROR event is detected. */
@@ -36922,7 +36970,9 @@ typedef struct {
   __IM  uint32_t  AMOUNT;                            /*!< (@ 0x0000000C) Number of bytes transferred in the last transaction,
                                                                          updated after the END event. Also updated after each
                                                                          MATCH event.*/
-  __IM  uint32_t  RESERVED1[3];
+  __IM  uint32_t  RESERVED1;
+  __IOM uint32_t  LIST;                              /*!< (@ 0x00000014) EasyDMA list type                                     */
+  __IM  uint32_t  RESERVED2;
   __IOM uint32_t  TERMINATEONBUSERROR;               /*!< (@ 0x0000001C) Terminate the transaction if a BUSERROR event is
                                                                          detected.*/
   __IM  uint32_t  BUSERRORADDRESS;                   /*!< (@ 0x00000020) Address of transaction that generated the last BUSERROR
@@ -36961,6 +37011,18 @@ typedef struct {
   #define TWIM_DMA_RX_AMOUNT_AMOUNT_Max (0xFFFFUL)   /*!< Max size of AMOUNT field.                                            */
 
 
+/* TWIM_DMA_RX_LIST: EasyDMA list type */
+  #define TWIM_DMA_RX_LIST_ResetValue (0x00000000UL) /*!< Reset value of LIST register.                                        */
+
+/* TYPE @Bits 0..2 : List type */
+  #define TWIM_DMA_RX_LIST_TYPE_Pos (0UL)            /*!< Position of TYPE field.                                              */
+  #define TWIM_DMA_RX_LIST_TYPE_Msk (0x7UL << TWIM_DMA_RX_LIST_TYPE_Pos) /*!< Bit mask of TYPE field.                          */
+  #define TWIM_DMA_RX_LIST_TYPE_Min (0x0UL)          /*!< Min enumerator value of TYPE field.                                  */
+  #define TWIM_DMA_RX_LIST_TYPE_Max (0x1UL)          /*!< Max enumerator value of TYPE field.                                  */
+  #define TWIM_DMA_RX_LIST_TYPE_Disabled (0x0UL)     /*!< Disable EasyDMA list                                                 */
+  #define TWIM_DMA_RX_LIST_TYPE_ArrayList (0x1UL)    /*!< Use array list                                                       */
+
+
 /* TWIM_DMA_RX_TERMINATEONBUSERROR: Terminate the transaction if a BUSERROR event is detected. */
   #define TWIM_DMA_RX_TERMINATEONBUSERROR_ResetValue (0x00000000UL) /*!< Reset value of TERMINATEONBUSERROR register.          */
 
@@ -36995,7 +37057,9 @@ typedef struct {
   __IM  uint32_t  AMOUNT;                            /*!< (@ 0x0000000C) Number of bytes transferred in the last transaction,
                                                                          updated after the END event. Also updated after each
                                                                          MATCH event.*/
-  __IM  uint32_t  RESERVED1[3];
+  __IM  uint32_t  RESERVED1;
+  __IOM uint32_t  LIST;                              /*!< (@ 0x00000014) EasyDMA list type                                     */
+  __IM  uint32_t  RESERVED2;
   __IOM uint32_t  TERMINATEONBUSERROR;               /*!< (@ 0x0000001C) Terminate the transaction if a BUSERROR event is
                                                                          detected.*/
   __IM  uint32_t  BUSERRORADDRESS;                   /*!< (@ 0x00000020) Address of transaction that generated the last BUSERROR
@@ -37030,6 +37094,18 @@ typedef struct {
   #define TWIM_DMA_TX_AMOUNT_AMOUNT_Msk (0xFFFFUL << TWIM_DMA_TX_AMOUNT_AMOUNT_Pos) /*!< Bit mask of AMOUNT field.             */
   #define TWIM_DMA_TX_AMOUNT_AMOUNT_Min (0x0001UL)   /*!< Min value of AMOUNT field.                                           */
   #define TWIM_DMA_TX_AMOUNT_AMOUNT_Max (0xFFFFUL)   /*!< Max size of AMOUNT field.                                            */
+
+
+/* TWIM_DMA_TX_LIST: EasyDMA list type */
+  #define TWIM_DMA_TX_LIST_ResetValue (0x00000000UL) /*!< Reset value of LIST register.                                        */
+
+/* TYPE @Bits 0..2 : List type */
+  #define TWIM_DMA_TX_LIST_TYPE_Pos (0UL)            /*!< Position of TYPE field.                                              */
+  #define TWIM_DMA_TX_LIST_TYPE_Msk (0x7UL << TWIM_DMA_TX_LIST_TYPE_Pos) /*!< Bit mask of TYPE field.                          */
+  #define TWIM_DMA_TX_LIST_TYPE_Min (0x0UL)          /*!< Min enumerator value of TYPE field.                                  */
+  #define TWIM_DMA_TX_LIST_TYPE_Max (0x1UL)          /*!< Max enumerator value of TYPE field.                                  */
+  #define TWIM_DMA_TX_LIST_TYPE_Disabled (0x0UL)     /*!< Disable EasyDMA list                                                 */
+  #define TWIM_DMA_TX_LIST_TYPE_ArrayList (0x1UL)    /*!< Use array list                                                       */
 
 
 /* TWIM_DMA_TX_TERMINATEONBUSERROR: Terminate the transaction if a BUSERROR event is detected. */
@@ -38570,7 +38646,9 @@ typedef struct {
   __IM  uint32_t  AMOUNT;                            /*!< (@ 0x0000000C) Number of bytes transferred in the last transaction,
                                                                          updated after the END event. Also updated after each
                                                                          MATCH event.*/
-  __IM  uint32_t  RESERVED1[3];
+  __IM  uint32_t  RESERVED1;
+  __IOM uint32_t  LIST;                              /*!< (@ 0x00000014) EasyDMA list type                                     */
+  __IM  uint32_t  RESERVED2;
   __IOM uint32_t  TERMINATEONBUSERROR;               /*!< (@ 0x0000001C) Terminate the transaction if a BUSERROR event is
                                                                          detected.*/
   __IM  uint32_t  BUSERRORADDRESS;                   /*!< (@ 0x00000020) Address of transaction that generated the last BUSERROR
@@ -38609,6 +38687,18 @@ typedef struct {
   #define TWIS_DMA_RX_AMOUNT_AMOUNT_Max (0xFFFFUL)   /*!< Max size of AMOUNT field.                                            */
 
 
+/* TWIS_DMA_RX_LIST: EasyDMA list type */
+  #define TWIS_DMA_RX_LIST_ResetValue (0x00000000UL) /*!< Reset value of LIST register.                                        */
+
+/* TYPE @Bits 0..2 : List type */
+  #define TWIS_DMA_RX_LIST_TYPE_Pos (0UL)            /*!< Position of TYPE field.                                              */
+  #define TWIS_DMA_RX_LIST_TYPE_Msk (0x7UL << TWIS_DMA_RX_LIST_TYPE_Pos) /*!< Bit mask of TYPE field.                          */
+  #define TWIS_DMA_RX_LIST_TYPE_Min (0x0UL)          /*!< Min enumerator value of TYPE field.                                  */
+  #define TWIS_DMA_RX_LIST_TYPE_Max (0x1UL)          /*!< Max enumerator value of TYPE field.                                  */
+  #define TWIS_DMA_RX_LIST_TYPE_Disabled (0x0UL)     /*!< Disable EasyDMA list                                                 */
+  #define TWIS_DMA_RX_LIST_TYPE_ArrayList (0x1UL)    /*!< Use array list                                                       */
+
+
 /* TWIS_DMA_RX_TERMINATEONBUSERROR: Terminate the transaction if a BUSERROR event is detected. */
   #define TWIS_DMA_RX_TERMINATEONBUSERROR_ResetValue (0x00000000UL) /*!< Reset value of TERMINATEONBUSERROR register.          */
 
@@ -38643,7 +38733,9 @@ typedef struct {
   __IM  uint32_t  AMOUNT;                            /*!< (@ 0x0000000C) Number of bytes transferred in the last transaction,
                                                                          updated after the END event. Also updated after each
                                                                          MATCH event.*/
-  __IM  uint32_t  RESERVED1[3];
+  __IM  uint32_t  RESERVED1;
+  __IOM uint32_t  LIST;                              /*!< (@ 0x00000014) EasyDMA list type                                     */
+  __IM  uint32_t  RESERVED2;
   __IOM uint32_t  TERMINATEONBUSERROR;               /*!< (@ 0x0000001C) Terminate the transaction if a BUSERROR event is
                                                                          detected.*/
   __IM  uint32_t  BUSERRORADDRESS;                   /*!< (@ 0x00000020) Address of transaction that generated the last BUSERROR
@@ -38678,6 +38770,18 @@ typedef struct {
   #define TWIS_DMA_TX_AMOUNT_AMOUNT_Msk (0xFFFFUL << TWIS_DMA_TX_AMOUNT_AMOUNT_Pos) /*!< Bit mask of AMOUNT field.             */
   #define TWIS_DMA_TX_AMOUNT_AMOUNT_Min (0x0001UL)   /*!< Min value of AMOUNT field.                                           */
   #define TWIS_DMA_TX_AMOUNT_AMOUNT_Max (0xFFFFUL)   /*!< Max size of AMOUNT field.                                            */
+
+
+/* TWIS_DMA_TX_LIST: EasyDMA list type */
+  #define TWIS_DMA_TX_LIST_ResetValue (0x00000000UL) /*!< Reset value of LIST register.                                        */
+
+/* TYPE @Bits 0..2 : List type */
+  #define TWIS_DMA_TX_LIST_TYPE_Pos (0UL)            /*!< Position of TYPE field.                                              */
+  #define TWIS_DMA_TX_LIST_TYPE_Msk (0x7UL << TWIS_DMA_TX_LIST_TYPE_Pos) /*!< Bit mask of TYPE field.                          */
+  #define TWIS_DMA_TX_LIST_TYPE_Min (0x0UL)          /*!< Min enumerator value of TYPE field.                                  */
+  #define TWIS_DMA_TX_LIST_TYPE_Max (0x1UL)          /*!< Max enumerator value of TYPE field.                                  */
+  #define TWIS_DMA_TX_LIST_TYPE_Disabled (0x0UL)     /*!< Disable EasyDMA list                                                 */
+  #define TWIS_DMA_TX_LIST_TYPE_ArrayList (0x1UL)    /*!< Use array list                                                       */
 
 
 /* TWIS_DMA_TX_TERMINATEONBUSERROR: Terminate the transaction if a BUSERROR event is detected. */
@@ -39918,7 +40022,7 @@ typedef struct {
   * @brief RX [UARTE_EVENTS_DMA_RX] Peripheral events.
   */
 typedef struct {
-  __IOM uint32_t  END;                               /*!< (@ 0x00000000) Generated after EasyDMA has completed its operation.  */
+  __IOM uint32_t  END;                               /*!< (@ 0x00000000) Generated after all MAXCNT bytes have been transferred*/
   __IOM uint32_t  READY;                             /*!< (@ 0x00000004) Generated when EasyDMA has buffered the .PTR and
                                                                          .MAXCNT registers for the channel, allowing them to be
                                                                          written to prepare for the next sequence.*/
@@ -39926,10 +40030,10 @@ typedef struct {
   __IOM uint32_t  MATCH[4];                          /*!< (@ 0x0000000C) Pattern match is detected on the DMA data bus.        */
 } NRF_UARTE_EVENTS_DMA_RX_Type;                      /*!< Size = 28 (0x01C)                                                    */
 
-/* UARTE_EVENTS_DMA_RX_END: Generated after EasyDMA has completed its operation. */
+/* UARTE_EVENTS_DMA_RX_END: Generated after all MAXCNT bytes have been transferred */
   #define UARTE_EVENTS_DMA_RX_END_ResetValue (0x00000000UL) /*!< Reset value of END register.                                  */
 
-/* END @Bit 0 : Generated after EasyDMA has completed its operation. */
+/* END @Bit 0 : Generated after all MAXCNT bytes have been transferred */
   #define UARTE_EVENTS_DMA_RX_END_END_Pos (0UL)      /*!< Position of END field.                                               */
   #define UARTE_EVENTS_DMA_RX_END_END_Msk (0x1UL << UARTE_EVENTS_DMA_RX_END_END_Pos) /*!< Bit mask of END field.               */
   #define UARTE_EVENTS_DMA_RX_END_END_Min (0x0UL)    /*!< Min enumerator value of END field.                                   */
@@ -39988,17 +40092,17 @@ typedef struct {
   * @brief TX [UARTE_EVENTS_DMA_TX] Peripheral events.
   */
 typedef struct {
-  __IOM uint32_t  END;                               /*!< (@ 0x00000000) Generated after EasyDMA has completed its operation.  */
+  __IOM uint32_t  END;                               /*!< (@ 0x00000000) Generated after all MAXCNT bytes have been transferred*/
   __IOM uint32_t  READY;                             /*!< (@ 0x00000004) Generated when EasyDMA has buffered the .PTR and
                                                                          .MAXCNT registers for the channel, allowing them to be
                                                                          written to prepare for the next sequence.*/
   __IOM uint32_t  BUSERROR;                          /*!< (@ 0x00000008) An error occured during the bus transfer.             */
 } NRF_UARTE_EVENTS_DMA_TX_Type;                      /*!< Size = 12 (0x00C)                                                    */
 
-/* UARTE_EVENTS_DMA_TX_END: Generated after EasyDMA has completed its operation. */
+/* UARTE_EVENTS_DMA_TX_END: Generated after all MAXCNT bytes have been transferred */
   #define UARTE_EVENTS_DMA_TX_END_ResetValue (0x00000000UL) /*!< Reset value of END register.                                  */
 
-/* END @Bit 0 : Generated after EasyDMA has completed its operation. */
+/* END @Bit 0 : Generated after all MAXCNT bytes have been transferred */
   #define UARTE_EVENTS_DMA_TX_END_END_Pos (0UL)      /*!< Position of END field.                                               */
   #define UARTE_EVENTS_DMA_TX_END_END_Msk (0x1UL << UARTE_EVENTS_DMA_TX_END_END_Pos) /*!< Bit mask of END field.               */
   #define UARTE_EVENTS_DMA_TX_END_END_Min (0x0UL)    /*!< Min enumerator value of END field.                                   */
@@ -40428,7 +40532,9 @@ typedef struct {
   __IM  uint32_t  AMOUNT;                            /*!< (@ 0x0000000C) Number of bytes transferred in the last transaction,
                                                                          updated after the END event. Also updated after each
                                                                          MATCH event.*/
-  __IM  uint32_t  RESERVED1[3];
+  __IM  uint32_t  RESERVED1;
+  __IOM uint32_t  LIST;                              /*!< (@ 0x00000014) EasyDMA list type                                     */
+  __IM  uint32_t  RESERVED2;
   __IOM uint32_t  TERMINATEONBUSERROR;               /*!< (@ 0x0000001C) Terminate the transaction if a BUSERROR event is
                                                                          detected.*/
   __IM  uint32_t  BUSERRORADDRESS;                   /*!< (@ 0x00000020) Address of transaction that generated the last BUSERROR
@@ -40467,6 +40573,18 @@ typedef struct {
   #define UARTE_DMA_RX_AMOUNT_AMOUNT_Max (0xFFFFUL)  /*!< Max size of AMOUNT field.                                            */
 
 
+/* UARTE_DMA_RX_LIST: EasyDMA list type */
+  #define UARTE_DMA_RX_LIST_ResetValue (0x00000000UL) /*!< Reset value of LIST register.                                       */
+
+/* TYPE @Bits 0..2 : List type */
+  #define UARTE_DMA_RX_LIST_TYPE_Pos (0UL)           /*!< Position of TYPE field.                                              */
+  #define UARTE_DMA_RX_LIST_TYPE_Msk (0x7UL << UARTE_DMA_RX_LIST_TYPE_Pos) /*!< Bit mask of TYPE field.                        */
+  #define UARTE_DMA_RX_LIST_TYPE_Min (0x0UL)         /*!< Min enumerator value of TYPE field.                                  */
+  #define UARTE_DMA_RX_LIST_TYPE_Max (0x1UL)         /*!< Max enumerator value of TYPE field.                                  */
+  #define UARTE_DMA_RX_LIST_TYPE_Disabled (0x0UL)    /*!< Disable EasyDMA list                                                 */
+  #define UARTE_DMA_RX_LIST_TYPE_ArrayList (0x1UL)   /*!< Use array list                                                       */
+
+
 /* UARTE_DMA_RX_TERMINATEONBUSERROR: Terminate the transaction if a BUSERROR event is detected. */
   #define UARTE_DMA_RX_TERMINATEONBUSERROR_ResetValue (0x00000000UL) /*!< Reset value of TERMINATEONBUSERROR register.         */
 
@@ -40501,7 +40619,9 @@ typedef struct {
   __IM  uint32_t  AMOUNT;                            /*!< (@ 0x0000000C) Number of bytes transferred in the last transaction,
                                                                          updated after the END event. Also updated after each
                                                                          MATCH event.*/
-  __IM  uint32_t  RESERVED1[3];
+  __IM  uint32_t  RESERVED1;
+  __IOM uint32_t  LIST;                              /*!< (@ 0x00000014) EasyDMA list type                                     */
+  __IM  uint32_t  RESERVED2;
   __IOM uint32_t  TERMINATEONBUSERROR;               /*!< (@ 0x0000001C) Terminate the transaction if a BUSERROR event is
                                                                          detected.*/
   __IM  uint32_t  BUSERRORADDRESS;                   /*!< (@ 0x00000020) Address of transaction that generated the last BUSERROR
@@ -40536,6 +40656,18 @@ typedef struct {
   #define UARTE_DMA_TX_AMOUNT_AMOUNT_Msk (0xFFFFUL << UARTE_DMA_TX_AMOUNT_AMOUNT_Pos) /*!< Bit mask of AMOUNT field.           */
   #define UARTE_DMA_TX_AMOUNT_AMOUNT_Min (0x0001UL)  /*!< Min value of AMOUNT field.                                           */
   #define UARTE_DMA_TX_AMOUNT_AMOUNT_Max (0xFFFFUL)  /*!< Max size of AMOUNT field.                                            */
+
+
+/* UARTE_DMA_TX_LIST: EasyDMA list type */
+  #define UARTE_DMA_TX_LIST_ResetValue (0x00000000UL) /*!< Reset value of LIST register.                                       */
+
+/* TYPE @Bits 0..2 : List type */
+  #define UARTE_DMA_TX_LIST_TYPE_Pos (0UL)           /*!< Position of TYPE field.                                              */
+  #define UARTE_DMA_TX_LIST_TYPE_Msk (0x7UL << UARTE_DMA_TX_LIST_TYPE_Pos) /*!< Bit mask of TYPE field.                        */
+  #define UARTE_DMA_TX_LIST_TYPE_Min (0x0UL)         /*!< Min enumerator value of TYPE field.                                  */
+  #define UARTE_DMA_TX_LIST_TYPE_Max (0x1UL)         /*!< Max enumerator value of TYPE field.                                  */
+  #define UARTE_DMA_TX_LIST_TYPE_Disabled (0x0UL)    /*!< Disable EasyDMA list                                                 */
+  #define UARTE_DMA_TX_LIST_TYPE_ArrayList (0x1UL)   /*!< Use array list                                                       */
 
 
 /* UARTE_DMA_TX_TERMINATEONBUSERROR: Terminate the transaction if a BUSERROR event is detected. */

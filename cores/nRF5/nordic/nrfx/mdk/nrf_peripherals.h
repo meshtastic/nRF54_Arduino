@@ -1,6 +1,6 @@
 /*
 
-Copyright (c) 2010 - 2025, Nordic Semiconductor ASA All rights reserved.
+Copyright (c) 2010 - 2026, Nordic Semiconductor ASA All rights reserved.
 
 SPDX-License-Identifier: BSD-3-Clause
 
@@ -35,6 +35,10 @@ POSSIBILITY OF SUCH DAMAGE.
 #ifndef NRF_PERIPHERALS_H__
 #define NRF_PERIPHERALS_H__
 
+#ifdef __ZEPHYR__
+#include <mdk_config.h>
+#endif
+
 /*lint ++flb "Enter library region */
 
 #if defined(NRF51)
@@ -66,8 +70,8 @@ POSSIBILITY OF SUCH DAMAGE.
 #elif defined (NRF54L05_XXAA)
     #include "nrf54l05_peripherals.h"
 
-#elif defined (NRF54LV10A_ENGA_XXAA)
-    #include "nrf54lv10a_enga_peripherals.h"
+#elif defined (NRF54LV10A_XXAA)
+    #include "nrf54lv10a_peripherals.h"
 
 #elif defined (NRF54L10_XXAA)
     #include "nrf54l10_peripherals.h"
@@ -75,11 +79,14 @@ POSSIBILITY OF SUCH DAMAGE.
 #elif defined (NRF54L15_XXAA)
     #include "nrf54l15_peripherals.h"
 
-#elif defined (NRF54LM20A_ENGA_XXAA)
-    #include "nrf54lm20a_enga_peripherals.h"
+#elif defined (NRF54LM20A_XXAA)
+    #include "nrf54lm20a_peripherals.h"
 
-#elif defined (NRF54LS05B_ENGA_XXAA)
-    #include "nrf54ls05b_enga_peripherals.h"
+#elif defined (NRF54LM20B_XXAA)
+    #include "nrf54lm20b_peripherals.h"
+
+#elif defined (NRF54LS05B_XXAA)
+    #include "nrf54ls05b_peripherals.h"
 
 #elif defined (NRF7120_ENGA_XXAA)
     #include "nrf7120_enga_peripherals.h"
@@ -91,6 +98,15 @@ POSSIBILITY OF SUCH DAMAGE.
 
 #elif defined (NRF9230_ENGB_XXAA)
     #include "nrf9230_engb_peripherals.h"
+
+#elif defined (NRF54LC10A_XXAA)
+    #include "nrf54lc10a_peripherals.h"
+
+#elif defined (NRF54LS05A_XXAA)
+    #include "nrf54ls05a_peripherals.h"
+
+#elif defined (NRF9220_XXAA)
+    #include "nrf9220_peripherals.h"
 
 #else
     #error "Device must be defined. See nrf_peripherals.h."
