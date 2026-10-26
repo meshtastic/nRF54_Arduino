@@ -128,7 +128,8 @@ chip-independently. Per-chip values (from `nrf54l<chip>_s145_v10.ld`):
 | nRF54L10 | `0x8000 – 0xC7000` | `0xC7000 – 0xCE000` | `0xCF000` | `0xDA800` |
 | nRF54L15 | `0x8000 – 0x147000` | `0x147000 – 0x14E000` | `0x14F000` | `0x15A800` |
 
-RAM ends at `0x2003FF80`; the bootloader keeps its BLE peer data and the
+App RAM ends at `0x20017F80` / `0x2002FF80` / `0x2003FF80` (L05 96 KB, L10
+192 KB, L15 256 KB); the bootloader keeps its BLE peer data and the
 double-reset marker in the last 128 bytes. Both sides must agree, so change
 the layout in the bootloader repo's `linker/` scripts in the same step.
 

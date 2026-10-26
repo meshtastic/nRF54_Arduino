@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.1 — 2026-10-26
+
+- nRF54L05 and nRF54L10: application RAM ends at `0x20017F80` / `0x2002FF80`
+  instead of the nRF54L15's `0x2003FF80`, which is past the end of their RAM.
+  The stack and the bootloader's peer data and double-reset marker are now
+  inside RAM, where the bootloader expects them
+
 ## 0.5.0 — 2026-10-26
 
 Requires s145 10.0.1, bootloader 0.5.0 and a platform with the 10.0.1 boards.
