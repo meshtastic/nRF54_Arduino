@@ -44,6 +44,11 @@
 // Words taken from the FIFO for the AES conditioning key (4 words, 128 bits)
 #define RNG_KEY_WORDS 4
 
+// What trng_init() in nrfx_cracen.c programs. The reset values vary by part and can be far too slow: an
+// nRF54LM20 resets to a sampling period of 0xFFF, and a TRNG start then takes 33 ms, past RNG_TIMEOUT.
+#define RNG_INIT_WAIT_VAL 512
+#define RNG_NUMBER_128_BLOCKS 4
+
 nRF54CryptoClass nRF54Crypto;
 
 //--------------------------------------------------------------------+
@@ -52,18 +57,23 @@ nRF54CryptoClass nRF54Crypto;
 
 static bool _rng_key_loaded;
 
-// Soft reset, then enable with 1x 128-bit block for AES conditioning. As in
-// nrfx_cracen_entropy_get(), the first words out of the FIFO after each reset become the new
-// conditioning key (cracen_rng_word()).
+// Soft reset, then configure and enable as trng_init() in nrfx_cracen.c does. As there, the first
+// words out of the FIFO after each reset become the new conditioning key (cracen_rng_word()).
 static void cracen_rng_reset(void)
 {
     nrf_cracen_rng_control_t cfg = { 0 };
     cfg.soft_reset = true;
     nrf_cracen_rng_control_set(NRF_CRACENCORE, &cfg);
 
+#if NRF_CRACEN_RNG_HAS_IDLE_TIMER
+    nrf_cracen_rng_off_timer_set(NRF_CRACENCORE, 0);
+#endif
+    nrf_cracen_rng_clk_div_set(NRF_CRACENCORE, TRNG_CLK_DIV);
+    nrf_cracen_rng_init_wait_val_set(NRF_CRACENCORE, RNG_INIT_WAIT_VAL);
+
     cfg.soft_reset = false;
     cfg.enable = true;
-    cfg.number_128_blocks = 1;
+    cfg.number_128_blocks = RNG_NUMBER_128_BLOCKS;
     nrf_cracen_rng_control_set(NRF_CRACENCORE, &cfg);
 
     _rng_key_loaded = false;
