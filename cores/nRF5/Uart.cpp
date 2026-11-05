@@ -229,7 +229,8 @@ size_t Uart::write(uint8_t data)
 
 size_t Uart::write(const uint8_t *buffer, size_t size)
 {
-  if(size == 0) return 0;
+  // end() deletes the semaphore, and there is none before begin()
+  if(!_begun || size == 0) return 0;
 
   size_t sent = 0;
 
@@ -253,6 +254,8 @@ size_t Uart::write(const uint8_t *buffer, size_t size)
 }
 
 int Uart::availableForWrite(void) {
+  if(!_begun) return 0;
+
   // UART does not use ring buffer for TX, therefore it is either busy or not
   UBaseType_t available = uxSemaphoreGetCount(_end_tx_sem);
   return available ? SERIAL_BUFFER_SIZE : 0;
