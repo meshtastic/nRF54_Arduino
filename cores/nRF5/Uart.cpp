@@ -40,6 +40,7 @@ Uart::Uart(NRF_UARTE_Type *_nrfUart, IRQn_Type _IRQn, uint8_t _pinRX, uint8_t _p
   uc_hwFlow = 0;
 
   _end_tx_sem = NULL;
+  _lock = NULL;
   _begun = false;
 }
 
@@ -54,6 +55,7 @@ Uart::Uart(NRF_UARTE_Type *_nrfUart, IRQn_Type _IRQn, uint8_t _pinRX, uint8_t _p
   uc_hwFlow = 1;
 
   _end_tx_sem = NULL;
+  _lock = NULL;
   _begun = false;
 }
 
@@ -70,8 +72,14 @@ void Uart::begin(unsigned long baudrate)
 
 void Uart::begin(unsigned long baudrate, uint16_t config)
 {
+  if ( _lock == NULL ) _lock = xSemaphoreCreateMutex();
+  xSemaphoreTake(_lock, portMAX_DELAY);
+
   // skip if already begun
-  if ( _begun ) return;
+  if ( _begun ) {
+    xSemaphoreGive(_lock);
+    return;
+  }
 
   nrfUart->PSEL.TXD = uc_pinTX;
   nrfUart->PSEL.RXD = uc_pinRX;
@@ -144,10 +152,22 @@ void Uart::begin(unsigned long baudrate, uint16_t config)
   _end_tx_sem = xSemaphoreCreateBinary();
   xSemaphoreGive(_end_tx_sem);
   _begun = true;
+
+  xSemaphoreGive(_lock);
 }
 
 void Uart::end()
 {
+  if ( _lock == NULL ) return;
+
+  // Waits for a write() or flush() in progress: none can be holding or waiting on _end_tx_sem below
+  xSemaphoreTake(_lock, portMAX_DELAY);
+
+  if ( !_begun ) {
+    xSemaphoreGive(_lock);
+    return;
+  }
+
   NVIC_DisableIRQ(IRQn);
 
   nrfUart->INTENCLR = UARTE_INTENCLR_DMARXEND_Msk | UARTE_INTENCLR_DMATXEND_Msk;
@@ -176,14 +196,20 @@ void Uart::end()
   vSemaphoreDelete(_end_tx_sem);
   _end_tx_sem = NULL;
   _begun = false;
+
+  xSemaphoreGive(_lock);
 }
 
 void Uart::flush()
 {
+  if ( _lock == NULL ) return;
+
+  xSemaphoreTake(_lock, portMAX_DELAY);
   if ( _begun ) {
     xSemaphoreTake(_end_tx_sem, portMAX_DELAY);
     xSemaphoreGive(_end_tx_sem);
   }
+  xSemaphoreGive(_lock);
 }
 
 void Uart::IrqHandler()
@@ -229,8 +255,15 @@ size_t Uart::write(uint8_t data)
 
 size_t Uart::write(const uint8_t *buffer, size_t size)
 {
-  // end() deletes the semaphore, and there is none before begin()
-  if(!_begun || size == 0) return 0;
+  // No lock before the first begin(), and the port can't be open without one
+  if(_lock == NULL || size == 0) return 0;
+
+  // Held for the whole buffer, so end() can't delete _end_tx_sem between chunks
+  xSemaphoreTake(_lock, portMAX_DELAY);
+  if(!_begun) {
+    xSemaphoreGive(_lock);
+    return 0;
+  }
 
   size_t sent = 0;
 
@@ -250,15 +283,22 @@ size_t Uart::write(const uint8_t *buffer, size_t size)
 
   } while (sent < size);
 
+  xSemaphoreGive(_lock);
   return sent;
 }
 
 int Uart::availableForWrite(void) {
-  if(!_begun) return 0;
+  // Don't wait: if another caller holds the lock, TX is busy anyway
+  if(_lock == NULL || xSemaphoreTake(_lock, 0) != pdTRUE) return 0;
 
-  // UART does not use ring buffer for TX, therefore it is either busy or not
-  UBaseType_t available = uxSemaphoreGetCount(_end_tx_sem);
-  return available ? SERIAL_BUFFER_SIZE : 0;
+  int available = 0;
+  if(_begun) {
+    // UART does not use ring buffer for TX, therefore it is either busy or not
+    available = uxSemaphoreGetCount(_end_tx_sem) ? SERIAL_BUFFER_SIZE : 0;
+  }
+
+  xSemaphoreGive(_lock);
+  return available;
 }
 
 //------------- Serial1 (UART, nRF54L has no USB CDC) -------------//

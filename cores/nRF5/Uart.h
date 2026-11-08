@@ -72,6 +72,10 @@ class Uart : public HardwareSerial
 
     // Adafruit
     SemaphoreHandle_t _end_tx_sem;
+
+    // Serialises begin()/end() with write()/flush()/availableForWrite(), so end()
+    // can't delete _end_tx_sem under a caller. Created by the first begin(), never deleted.
+    SemaphoreHandle_t _lock;
 };
 
 
