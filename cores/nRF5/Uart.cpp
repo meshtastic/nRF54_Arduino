@@ -40,7 +40,7 @@ Uart::Uart(NRF_UARTE_Type *_nrfUart, IRQn_Type _IRQn, uint8_t _pinRX, uint8_t _p
   uc_hwFlow = 0;
 
   _end_tx_sem = NULL;
-  _lock = NULL;
+  _lock = xSemaphoreCreateMutexStatic(&_lockStorage);
   _begun = false;
 }
 
@@ -55,7 +55,7 @@ Uart::Uart(NRF_UARTE_Type *_nrfUart, IRQn_Type _IRQn, uint8_t _pinRX, uint8_t _p
   uc_hwFlow = 1;
 
   _end_tx_sem = NULL;
-  _lock = NULL;
+  _lock = xSemaphoreCreateMutexStatic(&_lockStorage);
   _begun = false;
 }
 
@@ -72,7 +72,6 @@ void Uart::begin(unsigned long baudrate)
 
 void Uart::begin(unsigned long baudrate, uint16_t config)
 {
-  if ( _lock == NULL ) _lock = xSemaphoreCreateMutex();
   xSemaphoreTake(_lock, portMAX_DELAY);
 
   // skip if already begun
@@ -158,8 +157,6 @@ void Uart::begin(unsigned long baudrate, uint16_t config)
 
 void Uart::end()
 {
-  if ( _lock == NULL ) return;
-
   // Waits for a write() or flush() in progress: none can be holding or waiting on _end_tx_sem below
   xSemaphoreTake(_lock, portMAX_DELAY);
 
@@ -202,8 +199,6 @@ void Uart::end()
 
 void Uart::flush()
 {
-  if ( _lock == NULL ) return;
-
   xSemaphoreTake(_lock, portMAX_DELAY);
   if ( _begun ) {
     xSemaphoreTake(_end_tx_sem, portMAX_DELAY);
@@ -255,8 +250,7 @@ size_t Uart::write(uint8_t data)
 
 size_t Uart::write(const uint8_t *buffer, size_t size)
 {
-  // No lock before the first begin(), and the port can't be open without one
-  if(_lock == NULL || size == 0) return 0;
+  if(size == 0) return 0;
 
   // Held for the whole buffer, so end() can't delete _end_tx_sem between chunks
   xSemaphoreTake(_lock, portMAX_DELAY);
@@ -289,7 +283,7 @@ size_t Uart::write(const uint8_t *buffer, size_t size)
 
 int Uart::availableForWrite(void) {
   // Don't wait: if another caller holds the lock, TX is busy anyway
-  if(_lock == NULL || xSemaphoreTake(_lock, 0) != pdTRUE) return 0;
+  if(xSemaphoreTake(_lock, 0) != pdTRUE) return 0;
 
   int available = 0;
   if(_begun) {

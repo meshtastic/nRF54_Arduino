@@ -74,8 +74,10 @@ class Uart : public HardwareSerial
     SemaphoreHandle_t _end_tx_sem;
 
     // Serialises begin()/end() with write()/flush()/availableForWrite(), so end()
-    // can't delete _end_tx_sem under a caller. Created by the first begin(), never deleted.
+    // can't delete _end_tx_sem under a caller. Created by the constructor in
+    // _lockStorage, before any task can call in, and never deleted.
     SemaphoreHandle_t _lock;
+    StaticSemaphore_t _lockStorage;
 };
 
 
