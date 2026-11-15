@@ -139,11 +139,20 @@ static const uint8_t SCK  = PIN_SPI_SCK;
 
 /*
  * Wire Interfaces
+ *
+ * TWIM22, as on the nRF54L15 boards. The default NRF_TWIM0 alias is TWIM20,
+ * which shares SERIAL20 with UARTE20 (Serial2): both would define
+ * SERIAL20_IRQHandler, and a sketch using Wire wouldn't link.
  */
 #define WIRE_INTERFACES_COUNT 1
 
 #define PIN_WIRE_SDA         (37)  // P1.05  (or adjust per DK routing)
 #define PIN_WIRE_SCL         (38)  // P1.06
+
+#define WIRE_TWIM            NRF_TWIM22
+#define WIRE_TWIS            NRF_TWIS22
+#define WIRE_IRQN            SERIAL22_IRQn
+#define WIRE_IRQ_HANDLER     SERIAL22_IRQHandler
 
 #ifdef __cplusplus
 }
