@@ -43,3 +43,6 @@ jobs:
 
       - name: Build blink for ${{ matrix.board }}
         run: pio run -d tests/blink -e ${{ matrix.board }}
+
+      - name: Build the bundled libraries for ${{ matrix.board }}
+        run: pio run -d tests/libraries -e ${{ matrix.board }}
