@@ -551,6 +551,10 @@ void AdafruitBluefruit::autoConnLed(bool enabled)
 
 void AdafruitBluefruit::setConnLedInterval(uint32_t ms)
 {
+  // begin() creates the timer at its very end, and can fail before that. A NULL handle would only
+  // fault later, in the timer task, with nothing on its stack to say who sent the command.
+  if ( !_led_blink_th ) return;
+
   BaseType_t active = xTimerIsTimerActive(_led_blink_th);
   xTimerChangePeriod(_led_blink_th, ms2tick(ms), 0);
 
@@ -933,12 +937,12 @@ void AdafruitBluefruit::_ble_handler(ble_evt_t* evt)
  *------------------------------------------------------------------*/
 void AdafruitBluefruit::_startConnLed(void)
 {
-  if (_led_conn) xTimerStart(_led_blink_th, 0);
+  if (_led_conn && _led_blink_th) xTimerStart(_led_blink_th, 0);
 }
 
 void AdafruitBluefruit::_stopConnLed(void)
 {
-  xTimerStop(_led_blink_th, 0);
+  if (_led_blink_th) xTimerStop(_led_blink_th, 0);
 
   _setConnLed( this->connected() );
 }
