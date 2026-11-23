@@ -42,6 +42,71 @@ static bool twim_wait(NRF_TWIM_Type * twim, nrf_twim_event_t ev, bool abort_on_e
   return true;
 }
 
+// Open drain: setting a pin releases the line to the pull-up, clearing it drives the line low.
+static void i2c_pins_cfg(uint32_t scl, uint32_t sda, nrf_gpio_pin_dir_t dir)
+{
+  nrf_gpio_cfg(scl, dir, NRF_GPIO_PIN_INPUT_CONNECT, NRF_GPIO_PIN_PULLUP, NRF_GPIO_PIN_S0D1, NRF_GPIO_PIN_NOSENSE);
+  nrf_gpio_cfg(sda, dir, NRF_GPIO_PIN_INPUT_CONNECT, NRF_GPIO_PIN_PULLUP, NRF_GPIO_PIN_S0D1, NRF_GPIO_PIN_NOSENSE);
+}
+
+// Waits out clock stretching; a line that stays low is a stuck bus.
+static bool i2c_release_wait(uint32_t pin)
+{
+  nrf_gpio_pin_set(pin);
+  for (uint32_t us = 0; us < 25000; us++)
+  {
+    if (nrf_gpio_pin_read(pin)) return true;
+    delayMicroseconds(1);
+  }
+  return false;
+}
+
+// TWIM can't put an address on the bus without data (DMA.TX.MAXCNT is 1..0xFFFF), so the address-only
+// write that I2C scanners send is clocked out on the GPIOs instead, at up to 100 kHz.
+static uint8_t i2c_probe_address(uint32_t scl, uint32_t sda, uint8_t address)
+{
+  nrf_gpio_pin_set(scl);
+  nrf_gpio_pin_set(sda);
+  i2c_pins_cfg(scl, sda, NRF_GPIO_PIN_DIR_OUTPUT);
+
+  uint8_t status = 4;
+  if (i2c_release_wait(scl) && nrf_gpio_pin_read(sda))
+  {
+    delayMicroseconds(5);
+    nrf_gpio_pin_clear(sda); // START
+    delayMicroseconds(5);
+    nrf_gpio_pin_clear(scl);
+
+    // 7 address bits, the write bit, then SDA released for the target's ACK
+    uint16_t const frame = ((uint16_t) address << 2) | 1;
+    bool ack = false;
+    bool clocked = true;
+    for (uint16_t bit = 0x100; bit && clocked; bit >>= 1)
+    {
+      if (frame & bit) nrf_gpio_pin_set(sda); else nrf_gpio_pin_clear(sda);
+      delayMicroseconds(5);
+      clocked = i2c_release_wait(scl);
+      if (bit == 1) ack = !nrf_gpio_pin_read(sda);
+      delayMicroseconds(5);
+      nrf_gpio_pin_clear(scl);
+    }
+
+    nrf_gpio_pin_clear(sda); // STOP
+    delayMicroseconds(5);
+    if (clocked && i2c_release_wait(scl))
+    {
+      delayMicroseconds(5);
+      nrf_gpio_pin_set(sda);
+      status = ack ? 0 : 2;
+    }
+  }
+
+  nrf_gpio_pin_set(scl);
+  nrf_gpio_pin_set(sda);
+  i2c_pins_cfg(scl, sda, NRF_GPIO_PIN_DIR_INPUT);
+  return status;
+}
+
 TwoWire::TwoWire(NRF_TWIM_Type * p_twim, NRF_TWIS_Type * p_twis, IRQn_Type IRQn, uint8_t pinSDA, uint8_t pinSCL)
 {
   this->_p_twim = p_twim;
@@ -56,19 +121,7 @@ void TwoWire::begin(void) {
   //Main Mode
   master = true;
 
-  nrf_gpio_cfg(_uc_pinSCL,
-               NRF_GPIO_PIN_DIR_INPUT,
-               NRF_GPIO_PIN_INPUT_CONNECT,
-               NRF_GPIO_PIN_PULLUP,
-               NRF_GPIO_PIN_S0D1,
-               NRF_GPIO_PIN_NOSENSE);
-
-  nrf_gpio_cfg(_uc_pinSDA,
-               NRF_GPIO_PIN_DIR_INPUT,
-               NRF_GPIO_PIN_INPUT_CONNECT,
-               NRF_GPIO_PIN_PULLUP,
-               NRF_GPIO_PIN_S0D1,
-               NRF_GPIO_PIN_NOSENSE);
+  i2c_pins_cfg(_uc_pinSCL, _uc_pinSDA, NRF_GPIO_PIN_DIR_INPUT);
 
   nrf_twim_frequency_set(_p_twim, NRF_TWIM_FREQ_100K);
   // nRF54L ignores PSEL writes while the peripheral is enabled
@@ -227,6 +280,14 @@ uint8_t TwoWire::endTransmission(bool stopBit)
   transmissionBegun = false ;
 
   size_t len = txBuffer.available();
+  if (len == 0)
+  {
+    nrf_twim_disable(_p_twim);
+    uint8_t status = i2c_probe_address(_uc_pinSCL, _uc_pinSDA, txAddress);
+    nrf_twim_enable(_p_twim);
+    return status;
+  }
+
   nrf_twim_address_set(_p_twim, txAddress);
   (void) nrf_twim_errorsrc_get_and_clear(_p_twim);
   nrf_twim_event_clear(_p_twim, NRF_TWIM_EVENT_STOPPED);
@@ -235,13 +296,12 @@ uint8_t TwoWire::endTransmission(bool stopBit)
   nrf_twim_event_clear(_p_twim, NRF_TWIM_EVENT_LASTTX);
   nrf_twim_task_trigger(_p_twim, NRF_TWIM_TASK_RESUME);
 
-  // Let the shortcut end the transfer at the last byte; an address-only transfer has no LASTTX and is stopped right away.
-  nrf_twim_shorts_set(_p_twim, len == 0 ? 0 : (stopBit ? NRF_TWIM_SHORT_LASTTX_STOP_MASK : NRF_TWIM_SHORT_LASTTX_SUSPEND_MASK));
+  // Let the shortcut end the transfer at the last byte
+  nrf_twim_shorts_set(_p_twim, stopBit ? NRF_TWIM_SHORT_LASTTX_STOP_MASK : NRF_TWIM_SHORT_LASTTX_SUSPEND_MASK);
   nrf_twim_tx_buffer_set(_p_twim, txBuffer._aucBuffer, len);
   nrf_twim_task_trigger(_p_twim, NRF_TWIM_TASK_STARTTX);
-  if (len == 0) nrf_twim_task_trigger(_p_twim, NRF_TWIM_TASK_STOP);
 
-  bool done = twim_wait(_p_twim, (stopBit || len == 0) ? NRF_TWIM_EVENT_STOPPED : NRF_TWIM_EVENT_SUSPENDED);
+  bool done = twim_wait(_p_twim, stopBit ? NRF_TWIM_EVENT_STOPPED : NRF_TWIM_EVENT_SUSPENDED);
   nrf_twim_shorts_set(_p_twim, 0);
   if (nrf_twim_event_check(_p_twim, NRF_TWIM_EVENT_ERROR) && !nrf_twim_event_check(_p_twim, NRF_TWIM_EVENT_STOPPED))
   {
