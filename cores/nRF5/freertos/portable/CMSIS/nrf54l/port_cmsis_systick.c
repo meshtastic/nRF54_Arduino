@@ -227,11 +227,14 @@ void vPortSetupTimerInterrupt( void )
      * reset values, TIMEOUT 0 and WAKETIME 1, the SYSCOUNTER stops as soon as the CPU sleeps and gets a
      * single 32 kHz cycle to wake up before a compare. Every idle hang caught on the DK had a SoftDevice
      * compare 1.5-2 of those cycles past the stop that never fired, and no later one fired either, so the
-     * CPU slept until the watchdog. Apply NRFX_GRTC_SLEEP_DEFAULT_CONFIG (TIMEOUT 5, WAKETIME 4, and
-     * AUTOEN, which sd_softdevice_enable() requires) the way nrfx_grtc_sleep_configure() does, with the
-     * SYSCOUNTER stopped for the write. The SoftDevice is not enabled yet when the scheduler starts. */
+     * CPU slept until the watchdog. Apply NRFX_GRTC_SLEEP_DEFAULT_CONFIG (WAKETIME 4, and AUTOEN, which
+     * sd_softdevice_enable() requires) the way nrfx_grtc_sleep_configure() does, with the SYSCOUNTER
+     * stopped for the write. Its TIMEOUT 5 is raised to 6: the datasheet requires TIMEOUT > WAKETIME +
+     * guard, with a guard of at least one LFCLK cycle. The SoftDevice is not enabled yet when the
+     * scheduler starts. */
     {
-        nrfx_grtc_sleep_config_t const sleep_cfg = NRFX_GRTC_SLEEP_DEFAULT_CONFIG;
+        nrfx_grtc_sleep_config_t sleep_cfg = NRFX_GRTC_SLEEP_DEFAULT_CONFIG;
+        sleep_cfg.timeout = sleep_cfg.waketime + 2;
         bool const active = nrfy_grtc_sys_counter_check(NRF_GRTC);
         if (active)
         {
