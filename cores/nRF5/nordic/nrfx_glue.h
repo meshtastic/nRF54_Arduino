@@ -161,6 +161,22 @@ static inline bool _NRFX_IRQ_IS_PENDING(IRQn_Type irq_number)
 #define NRFX_DELAY_US(us_time)  nrfx_coredep_delay_us(us_time)
 
 // ---------------------------------------------------------------------------
+// Bit operations
+// ---------------------------------------------------------------------------
+
+#define NRFX_CLZ(value) __builtin_clz(value)
+#define NRFX_CTZ(value) __builtin_ctz(value)
+
+// ---------------------------------------------------------------------------
+// Cache maintenance
+// ---------------------------------------------------------------------------
+
+// nRF54L has an instruction cache only, so DMA buffers need no maintenance.
+#define NRFY_CACHE_WB(p_buffer, size)    do { (void)(p_buffer); (void)(size); } while (0)
+#define NRFY_CACHE_INV(p_buffer, size)   do { (void)(p_buffer); (void)(size); } while (0)
+#define NRFY_CACHE_WBINV(p_buffer, size) do { (void)(p_buffer); (void)(size); } while (0)
+
+// ---------------------------------------------------------------------------
 // Error codes
 // ---------------------------------------------------------------------------
 
